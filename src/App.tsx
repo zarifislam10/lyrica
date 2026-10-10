@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react"
 
 import { practiceLines } from "@/data/lines"
 import {
@@ -960,7 +967,11 @@ function RoundResultScreen({
                   winner === player ? "winner" : ""
                 }`}
                 key={player}
+                style={{ "--player": PLAYER_COLORS[player] } as CSSProperties}
               >
+                {winner === player && (
+                  <span className="winner-badge">✦ Round winner</span>
+                )}
                 <span
                   className="player-chip"
                   style={{ color: PLAYER_COLORS[player] }}
