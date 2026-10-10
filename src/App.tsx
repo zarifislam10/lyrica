@@ -1,14 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 
 import { practiceLines } from "@/data/lines"
+import {
+  PLAYER_COLORS,
+  createMatchState,
+  displayName,
+  fallbackCommentary,
+  isMatchOver,
+  lineForRound,
+  loadStoredNames,
+  matchReducer,
+  type MatchState,
+} from "@/domain/match"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { PitchSample, PracticeLine } from "@/domain/types"
+import SetupScreen from "@/screens/SetupScreen"
+import HandoverScreen from "@/screens/HandoverScreen"
+import FinalScreen from "@/screens/FinalScreen"
+import {
+  createAudioContext,
+  sessionFromMic,
+  unlockAudio,
+  type AudioSession,
+} from "@/services/audioSession"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
 import { createPitchDetector } from "@/services/pitch"
 
-type Screen = "home" | "pick" | "sing" | "result"
 type SingState = "ready" | "starting" | "counting" | "recording"
-type ErrorKind = "blocked" | "no-device" | "unclear" | "generic" | null
+type ErrorKind = "blocked" | "no-device" | "unclear" | "interrupted" | "generic" | null
 
 const DURATION = 4
 const COUNT_IN_BEATS = 3
@@ -360,57 +379,15 @@ function PitchLane({
   )
 }
 
-function PickScreen({
-  onPick,
-  onHome,
-}: {
-  onPick: (line: PracticeLine) => void
-  onHome: () => void
-}) {
-  return (
-    <main className="screen pick-screen">
-      <CornerDots />
-      <header className="pick-header">
-        <Brand onHome={onHome} />
-        <p>Practice Song</p>
-      </header>
-
-      <section className="line-list" aria-labelledby="pick-title">
-        <div className="section-kicker">TODAY’S PRACTICE</div>
-        <h1 id="pick-title">Pick a line</h1>
-        <p className="section-copy">Take it one phrase at a time.</p>
-
-        <div className="line-cards">
-          {practiceLines.map((line, index) => (
-            <button
-              className="line-card"
-              key={line.id}
-              onClick={() => onPick(line)}
-            >
-              <span className="line-number">0{index + 1}</span>
-              <span className="line-text">
-                <strong>{line.hangul}</strong>
-                <small>{line.romanization}</small>
-              </span>
-              <span className="line-arrow">→</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <p className="pick-note">
-        <span />
-        Pitch practice · about 1 min
-      </p>
-    </main>
-  )
-}
-
 function ScreenHeader({
-  line,
+  round,
+  playerLabel,
+  playerColor,
   onHome,
 }: {
-  line: PracticeLine
+  round: 1 | 2 | 3
+  playerLabel?: string
+  playerColor?: string
   onHome: () => void
 }) {
   return (
@@ -418,11 +395,20 @@ function ScreenHeader({
       <Brand onHome={onHome} />
       <div className="line-progress">
         <span>
-          Line {line.id} <i>of</i> 3
+          Round {round} <i>of</i> 3
+          {playerLabel ? (
+            <>
+              {" "}
+              ·{" "}
+              <b style={{ color: playerColor, fontWeight: 800 }}>
+                {playerLabel}
+              </b>
+            </>
+          ) : null}
         </span>
-        <div className="progress-dots" aria-label={`Line ${line.id} of 3`}>
+        <div className="progress-dots" aria-label={`Round ${round} of 3`}>
           {practiceLines.map((item) => (
-            <i className={item.id === line.id ? "active" : ""} key={item.id} />
+            <i className={item.id === round ? "active" : ""} key={item.id} />
           ))}
         </div>
       </div>
@@ -473,12 +459,20 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 
 function SingScreen({
   line,
+  round,
+  playerLabel,
+  playerColor,
+  getSession,
   onHome,
-  onComplete,
+  onScored,
 }: {
   line: PracticeLine
+  round: 1 | 2 | 3
+  playerLabel: string
+  playerColor: string
+  getSession: () => Promise<AudioSession>
   onHome: () => void
-  onComplete: (samples: PitchSample[]) => void
+  onScored: (samples: PitchSample[]) => void
 }) {
   const [singState, setSingState] = useState<SingState>("ready")
   const [count, setCount] = useState(COUNT_IN_BEATS)
@@ -488,31 +482,41 @@ function SingScreen({
   const [referencePlaying, setReferencePlaying] = useState(false)
 
   const audioCtxRef = useRef<AudioContext | null>(null)
-  const micStopRef = useRef<(() => void) | null>(null)
   const detectorRef = useRef<ReturnType<typeof createPitchDetector> | null>(
     null,
   )
   const samplesRef = useRef<PitchSample[]>([])
   const rafRef = useRef(0)
-  const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
+  const singStateRef = useRef<SingState>("ready")
+  singStateRef.current = singState
+  const onScoredRef = useRef(onScored)
+  onScoredRef.current = onScored
 
+  // Stops this take only; the match keeps the mic stream open.
   const cleanup = () => {
     cancelAnimationFrame(rafRef.current)
     rafRef.current = 0
     detectorRef.current?.stop()
     detectorRef.current = null
-    micStopRef.current?.()
-    micStopRef.current = null
-    const ctx = audioCtxRef.current
     audioCtxRef.current = null
-    if (ctx && ctx.state !== "closed") {
-      void ctx.close().catch(() => {})
-    }
   }
 
-  // Cleanup if the screen unmounts mid-count-in or mid-recording.
   useEffect(() => cleanup, [])
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState !== "hidden") return
+      const state = singStateRef.current
+      if (state !== "counting" && state !== "recording") return
+      cleanup()
+      setProgress(0)
+      setLiveSamples([])
+      setSingState("ready")
+      setError("interrupted")
+    }
+    document.addEventListener("visibilitychange", onHidden)
+    return () => document.removeEventListener("visibilitychange", onHidden)
+  }, [])
 
   const startRecording = async () => {
     if (singState !== "ready") return
@@ -520,28 +524,12 @@ function SingScreen({
     setProgress(0)
     setLiveSamples([])
     samplesRef.current = []
-
-    // iOS Safari requires the AudioContext to be created AND resumed
-    // synchronously inside the user gesture, before any await.
-    const AudioCtor: typeof AudioContext =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext!
-    if (!AudioCtor) {
-      setError("generic")
-      return
-    }
-    const ctx = new AudioCtor()
-    audioCtxRef.current = ctx
-    void ctx.resume().catch(() => {})
-
     setSingState("starting")
 
-    let handle: Awaited<ReturnType<typeof requestMicrophone>>
+    let session: AudioSession
     try {
-      handle = await requestMicrophone()
+      session = await getSession()
     } catch (err) {
-      cleanup()
       setSingState("ready")
       if (err instanceof MicrophoneError) {
         setError(err.kind)
@@ -550,11 +538,12 @@ function SingScreen({
       }
       return
     }
-    micStopRef.current = handle.stop
+    const ctx = session.ctx
+    audioCtxRef.current = ctx
 
     const detector = createPitchDetector({
       ctx,
-      stream: handle.stream,
+      stream: session.stream,
       onSample: (sample) => {
         samplesRef.current = [...samplesRef.current, sample]
         setLiveSamples(samplesRef.current)
@@ -598,9 +587,11 @@ function SingScreen({
           cleanup()
           if (clarityRatio < MIN_CLARITY_FRAME_RATIO) {
             setSingState("ready")
+            setProgress(0)
+            setLiveSamples([])
             setError("unclear")
           } else {
-            onCompleteRef.current(finalSamples)
+            onScoredRef.current(finalSamples)
           }
           return
         }
@@ -622,19 +613,23 @@ function SingScreen({
     blocked: "Mic access needed",
     "no-device": "No microphone found",
     unclear: "No clear voice",
+    interrupted: "Take cancelled",
     generic: "Something went wrong",
   }
   const errorBody: Record<Exclude<ErrorKind, null>, string> = {
     blocked:
       "Microphone access is off. Allow it in your browser settings, then try again.",
     "no-device": "We couldn't find a microphone. Connect one and try again.",
-    unclear: "We couldn't hear a clear pitch. Try again somewhere quieter.",
+    unclear:
+      "We couldn't hear a clear pitch, so this take doesn't count. Try again somewhere quieter.",
+    interrupted: "The screen left the app mid-take. Sing it again.",
     generic: "The microphone couldn't start. Please try again.",
   }
   const errorAction: Record<Exclude<ErrorKind, null>, string> = {
     blocked: "Retry",
     "no-device": "Retry",
     unclear: "Redo",
+    interrupted: "Redo",
     generic: "Retry",
   }
 
@@ -643,7 +638,7 @@ function SingScreen({
       ? "SING NOW"
       : singState === "starting"
         ? "GETTING READY"
-        : "YOUR LINE"
+        : `${playerLabel.toUpperCase()}'S TURN`
   const headerTitle =
     singState === "recording"
       ? "Stay with the guide"
@@ -663,7 +658,12 @@ function SingScreen({
   return (
     <main className="screen sing-screen">
       <CornerDots />
-      <ScreenHeader line={line} onHome={onHome} />
+      <ScreenHeader
+        round={round}
+        playerLabel={playerLabel}
+        playerColor={playerColor}
+        onHome={onHome}
+      />
 
       <section className="sing-content">
         <div className="instruction-row">
@@ -798,10 +798,12 @@ function joinWithAnd(parts: string[]): string {
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`
 }
 
-function buildCoachCopy(
-  line: PracticeLine,
-  missed: number[],
-): { heading: string; body: string } {
+type CoachCopy = {
+  heading: string
+  body: string
+}
+
+function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   if (missed.length === 0) {
     return { heading: "Nice and steady", body: "Clean take." }
   }
@@ -815,97 +817,92 @@ function buildCoachCopy(
   }
 }
 
-function ResultScreen({
-  line,
-  samples,
+function RoundResultScreen({
+  state,
   onHome,
-  onRetry,
-  onNext,
+  onContinue,
 }: {
-  line: PracticeLine
-  samples: PitchSample[]
+  state: MatchState
   onHome: () => void
-  onRetry: () => void
-  onNext: () => void
+  onContinue: () => void
 }) {
-  const [tipPlaying, setTipPlaying] = useState(false)
-
-  const result = useMemo(() => scoreTurn(line, samples), [line, samples])
-  const coach = useMemo(
-    () => buildCoachCopy(line, result.missed),
-    [line, result.missed],
-  )
+  const line = lineForRound(state.round)
+  const winner = state.roundWinner
+  const matchOver = isMatchOver(state)
 
   return (
     <main className="screen result-screen">
       <CornerDots />
-      <ScreenHeader line={line} onHome={onHome} />
+      <ScreenHeader round={state.round} onHome={onHome} />
 
       <section className="result-content">
-        <div className="score">
-          <HalftoneSparkle
-            className="score-star"
-            color="#FF4FA3"
-            accent="#19B5FF"
-          />
-          <p>Nice work</p>
-          <div>
-            <strong>{result.score}</strong>
-            <span>match</span>
-          </div>
+        <div className="dual-scores">
+          {([0, 1] as const).map((player) => {
+            const coach = buildCoachCopy(line, state.turnMissed[player])
+            return (
+              <div
+                className={`player-score-card ${
+                  winner === player ? "winner" : ""
+                }`}
+                key={player}
+              >
+                <span
+                  className="player-chip"
+                  style={{ color: PLAYER_COLORS[player] }}
+                >
+                  <i
+                    className="player-swatch"
+                    style={{ background: PLAYER_COLORS[player] }}
+                  />
+                  {displayName(state, player)}
+                </span>
+                <strong>{state.turnScores[player] ?? 0}</strong>
+                <p>{coach.body}</p>
+              </div>
+            )
+          })}
         </div>
 
-        <LyricSyllables line={line} result missed={result.missed} />
-        <PitchLane
-          line={line}
-          progress={1}
-          showVoice
-          result
-          samples={samples}
-          missed={result.missed}
-        />
+        <p className="commentary-line">{fallbackCommentary(state)}</p>
 
-        <div className="legend">
-          <span>
-            <i className="target-key" /> Target
+        {([0, 1] as const).map((player) => (
+          <div key={player}>
+            <p className="player-chip" style={{ color: PLAYER_COLORS[player] }}>
+              {displayName(state, player)}
+            </p>
+            <LyricSyllables
+              line={line}
+              result
+              missed={state.turnMissed[player]}
+            />
+            <PitchLane
+              line={line}
+              progress={1}
+              showVoice
+              result
+              samples={state.turnSamples[player]}
+              missed={state.turnMissed[player]}
+            />
+          </div>
+        ))}
+
+        <div className="scoreboard-row">
+          <span style={{ color: PLAYER_COLORS[0] }}>
+            {displayName(state, 0)}
           </span>
           <span>
-            <i className="voice-key" /> Your voice
+            {state.roundWins[0]} – {state.roundWins[1]}
+          </span>
+          <span style={{ color: PLAYER_COLORS[1] }}>
+            {displayName(state, 1)}
           </span>
         </div>
-
-        <article className={`coach-card ${tipPlaying ? "playing" : ""}`}>
-          <div className="coach-heading">
-            <div>
-              <span>COACH TIP</span>
-              <h2>{coach.heading}</h2>
-            </div>
-            <button
-              onClick={() => setTipPlaying((playing) => !playing)}
-              aria-label={tipPlaying ? "Pause coach tip" : "Play coach tip"}
-            >
-              <SpeakerIcon />
-            </button>
-          </div>
-          <p>{coach.body}</p>
-          {tipPlaying && (
-            <div className="audio-waves" aria-label="Playing tip">
-              {[9, 18, 12, 22, 15, 8, 18, 11, 20, 9, 15, 7].map(
-                (height, index) => (
-                  <i key={index} style={{ height }} />
-                ),
-              )}
-            </div>
-          )}
-        </article>
       </section>
 
       <div className="result-actions">
-        <button className="secondary-button" onClick={onRetry}>
-          Try again
-        </button>
-        <button className="primary-button" onClick={onNext}>
-          Next line <span>→</span>
+        <button className="primary-button" onClick={onContinue}>
+          {matchOver ? "See the winner" : `Round ${state.round + 1}`}{" "}
+          <span>→</span>
         </button>
       </div>
     </main>
@@ -913,53 +910,132 @@ function ResultScreen({
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("home")
-  const [selectedLine, setSelectedLine] = useState(practiceLines[0])
-  const [recordedSamples, setRecordedSamples] = useState<PitchSample[]>([])
+  const [state, dispatch] = useReducer(matchReducer, undefined, () =>
+    createMatchState(loadStoredNames()),
+  )
+  const sessionRef = useRef<AudioSession | null>(null)
 
-  const pickLine = (line: PracticeLine) => {
-    setSelectedLine(line)
-    setRecordedSamples([])
-    setScreen("sing")
+  const inMatch =
+    state.phase === "turnReady" ||
+    state.phase === "handover" ||
+    state.phase === "roundResult"
+
+  useEffect(() => {
+    if (!inMatch) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [inMatch])
+
+  useEffect(() => () => sessionRef.current?.close(), [])
+
+  const closeSession = () => {
+    sessionRef.current?.close()
+    sessionRef.current = null
   }
 
-  const nextLine = () => {
-    const nextIndex = selectedLine.id % practiceLines.length
-    setSelectedLine(practiceLines[nextIndex])
-    setRecordedSamples([])
-    setScreen("sing")
+  const goHome = () => {
+    if (inMatch && !window.confirm("Leave this battle?")) return
+    closeSession()
+    dispatch({ type: "GO_HOME" })
   }
 
-  const handleRecorded = (samples: PitchSample[]) => {
-    setRecordedSamples(samples)
-    setScreen("result")
+  // Reuse the match's stream; only re-ask if the mic was unplugged or closed.
+  const getSession = async (): Promise<AudioSession> => {
+    const existing = sessionRef.current
+    const track = existing?.stream.getAudioTracks()[0]
+    if (
+      existing &&
+      existing.ctx.state !== "closed" &&
+      track?.readyState === "live"
+    ) {
+      unlockAudio(existing.ctx)
+      return existing
+    }
+    const ctx =
+      existing && existing.ctx.state !== "closed"
+        ? existing.ctx
+        : createAudioContext()
+    if (!ctx) throw new MicrophoneError("generic", "No AudioContext")
+    unlockAudio(ctx)
+    const handle = await requestMicrophone()
+    existing?.stop()
+    const session = sessionFromMic(ctx, handle)
+    sessionRef.current = session
+    return session
   }
+
+  const line = lineForRound(state.round)
+  const player = state.currentPlayer
 
   return (
     <div className="app-shell">
       <div className="site-frame">
-        {screen === "home" && <HomeScreen onStart={() => setScreen("pick")} />}
-        {screen === "pick" && (
-          <PickScreen onPick={pickLine} onHome={() => setScreen("home")} />
+        {state.phase === "home" && (
+          <HomeScreen onStart={() => dispatch({ type: "GO_SETUP" })} />
         )}
-        {screen === "sing" && (
-          <SingScreen
-            key={`sing-${selectedLine.id}`}
-            line={selectedLine}
-            onHome={() => setScreen("home")}
-            onComplete={handleRecorded}
+        {state.phase === "setup" && (
+          <SetupScreen
+            names={state.names}
+            onNameChange={(index, name) =>
+              dispatch({ type: "SET_NAME", player: index, name })
+            }
+            onMicReady={(session) => {
+              if (sessionRef.current && sessionRef.current !== session) {
+                sessionRef.current.stop()
+              }
+              sessionRef.current = session
+            }}
+            onStart={() => dispatch({ type: "START_MATCH" })}
           />
         )}
-        {screen === "result" && (
-          <ResultScreen
-            line={selectedLine}
-            samples={recordedSamples}
-            onHome={() => setScreen("home")}
-            onRetry={() => {
-              setRecordedSamples([])
-              setScreen("sing")
+        {state.phase === "turnReady" && (
+          <SingScreen
+            key={`${state.round}-${player}-${state.replays}`}
+            line={line}
+            round={state.round}
+            playerLabel={displayName(state, player)}
+            playerColor={PLAYER_COLORS[player]}
+            getSession={getSession}
+            onHome={goHome}
+            onScored={(samples) => {
+              const result = scoreTurn(line, samples)
+              const timing =
+                result.syllables.reduce((sum, s) => sum + s.timing, 0) /
+                Math.max(1, result.syllables.length)
+              dispatch({
+                type: "TURN_SCORED",
+                score: result.score,
+                timing,
+                missed: result.missed,
+                samples,
+              })
             }}
-            onNext={nextLine}
+          />
+        )}
+        {state.phase === "handover" && (
+          <HandoverScreen
+            state={state}
+            onContinue={() => dispatch({ type: "HANDOVER_DONE" })}
+          />
+        )}
+        {state.phase === "roundResult" && (
+          <RoundResultScreen
+            state={state}
+            onHome={goHome}
+            onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}
+          />
+        )}
+        {state.phase === "final" && (
+          <FinalScreen
+            state={state}
+            onRematch={() => dispatch({ type: "REMATCH" })}
+            onHome={() => {
+              closeSession()
+              dispatch({ type: "GO_HOME" })
+            }}
           />
         )}
       </div>
