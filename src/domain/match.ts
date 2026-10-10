@@ -4,13 +4,7 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
 
-export type MatchPhase =
-  | "home"
-  | "setup"
-  | "turnReady"
-  | "handover"
-  | "roundResult"
-  | "final"
+export type MatchPhase = "home" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
 
 export type PlayerIndex = 0 | 1
 export type RoundNumber = 1 | 2 | 3
@@ -32,21 +26,19 @@ export type MatchState = {
   replays: number
 }
 
-export type MatchAction =
-  | { type: "GO_SETUP" }
-  | { type: "SET_NAME"; player: PlayerIndex; name: string }
-  | { type: "START_MATCH" }
-  | {
-      type: "TURN_SCORED"
-      score: number
-      timing: number
-      missed: number[]
-      samples: PitchSample[]
-    }
-  | { type: "HANDOVER_DONE" }
-  | { type: "ROUND_CONTINUE" }
-  | { type: "REMATCH" }
-  | { type: "GO_HOME" }
+export type MatchAction = { type: "GO_SETUP" } | {
+  type: "SET_NAME"
+  player: PlayerIndex
+  name: string
+} | { type: "START_MATCH" } | {
+  type: "TURN_SCORED"
+  score: number
+  timing: number
+  missed: number[]
+  samples: PitchSample[]
+} | { type: "HANDOVER_DONE" } | { type: "ROUND_CONTINUE" } | {
+  type: "REMATCH"
+} | { type: "GO_HOME" }
 
 export const PLAYER_COLORS: [string, string] = ["#FF4FA3", "#19B5FF"]
 
@@ -145,9 +137,7 @@ function afterBothSung(state: MatchState): MatchState {
 }
 
 export function isMatchOver(state: MatchState): boolean {
-  return (
-    state.roundWins[0] >= 2 || state.roundWins[1] >= 2 || state.round === 3
-  )
+  return state.roundWins[0] >= 2 || state.roundWins[1] >= 2 || state.round === 3
 }
 
 function applyTurnScore(
@@ -194,7 +184,10 @@ function applyTurnScore(
   return afterBothSung(next)
 }
 
-export function matchReducer(state: MatchState, action: MatchAction): MatchState {
+export function matchReducer(
+  state: MatchState,
+  action: MatchAction,
+): MatchState {
   switch (action.type) {
     case "GO_SETUP":
       return { ...state, phase: "setup" }

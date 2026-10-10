@@ -14,10 +14,7 @@ export default function FinalScreen({
   return (
     <main className="screen final-screen">
       <section className="final-content">
-        <p
-          className="player-chip"
-          style={{ color: PLAYER_COLORS[winner] }}
-        >
+        <p className="player-chip" style={{ color: PLAYER_COLORS[winner] }}>
           Winner
         </p>
         <h1>{displayName(state, winner)}</h1>

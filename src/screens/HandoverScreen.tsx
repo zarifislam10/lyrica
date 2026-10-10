@@ -13,10 +13,7 @@ export default function HandoverScreen({
   return (
     <main className="screen handover-screen">
       <section className="handover-content">
-        <p
-          className="player-chip"
-          style={{ color: PLAYER_COLORS[next] }}
-        >
+        <p className="player-chip" style={{ color: PLAYER_COLORS[next] }}>
           <i
             className="player-swatch"
             style={{ background: PLAYER_COLORS[next] }}

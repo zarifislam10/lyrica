@@ -27,13 +27,7 @@ import { MicrophoneError, requestMicrophone } from "@/services/microphone"
 import { createPitchDetector } from "@/services/pitch"
 
 type SingState = "ready" | "starting" | "counting" | "recording"
-type ErrorKind =
-  | "blocked"
-  | "no-device"
-  | "unclear"
-  | "interrupted"
-  | "generic"
-  | null
+type ErrorKind = "blocked" | "no-device" | "unclear" | "interrupted" | "generic" | null
 
 const DURATION = 4
 const COUNT_IN_BEATS = 3
@@ -804,10 +798,12 @@ function joinWithAnd(parts: string[]): string {
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`
 }
 
-function buildCoachCopy(
-  line: PracticeLine,
-  missed: number[],
-): { heading: string; body: string } {
+type CoachCopy = {
+  heading: string
+  body: string
+}
+
+function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   if (missed.length === 0) {
     return { heading: "Nice and steady", body: "Clean take." }
   }
@@ -871,10 +867,7 @@ function RoundResultScreen({
 
         {([0, 1] as const).map((player) => (
           <div key={player}>
-            <p
-              className="player-chip"
-              style={{ color: PLAYER_COLORS[player] }}
-            >
+            <p className="player-chip" style={{ color: PLAYER_COLORS[player] }}>
               {displayName(state, player)}
             </p>
             <LyricSyllables
@@ -953,13 +946,18 @@ export default function App() {
   const getSession = async (): Promise<AudioSession> => {
     const existing = sessionRef.current
     const track = existing?.stream.getAudioTracks()[0]
-    if (existing && existing.ctx.state !== "closed" && track?.readyState === "live") {
+    if (
+      existing &&
+      existing.ctx.state !== "closed" &&
+      track?.readyState === "live"
+    ) {
       unlockAudio(existing.ctx)
       return existing
     }
-    const ctx = existing && existing.ctx.state !== "closed"
-      ? existing.ctx
-      : createAudioContext()
+    const ctx =
+      existing && existing.ctx.state !== "closed"
+        ? existing.ctx
+        : createAudioContext()
     if (!ctx) throw new MicrophoneError("generic", "No AudioContext")
     unlockAudio(ctx)
     const handle = await requestMicrophone()
