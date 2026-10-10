@@ -10,7 +10,6 @@ import {
   lineForRound,
   loadStoredNames,
   matchReducer,
-  roundWinner,
   type MatchState,
 } from "@/domain/match"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
@@ -469,29 +468,23 @@ function SingScreen({
   round,
   playerLabel,
   playerColor,
-  unclearAttempts,
   getSession,
   onHome,
   onScored,
-  onUnclear,
 }: {
   line: PracticeLine
   round: 1 | 2 | 3
   playerLabel: string
   playerColor: string
-  unclearAttempts: number
   getSession: () => Promise<AudioSession>
   onHome: () => void
   onScored: (samples: PitchSample[]) => void
-  onUnclear: () => void
 }) {
   const [singState, setSingState] = useState<SingState>("ready")
   const [count, setCount] = useState(COUNT_IN_BEATS)
   const [progress, setProgress] = useState(0)
   const [liveSamples, setLiveSamples] = useState<PitchSample[]>([])
-  const [error, setError] = useState<ErrorKind>(
-    unclearAttempts > 0 ? "unclear" : null,
-  )
+  const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
 
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -504,8 +497,6 @@ function SingScreen({
   singStateRef.current = singState
   const onScoredRef = useRef(onScored)
   onScoredRef.current = onScored
-  const onUnclearRef = useRef(onUnclear)
-  onUnclearRef.current = onUnclear
 
   // Stops this take only; the match keeps the mic stream open.
   const cleanup = () => {
@@ -605,7 +596,6 @@ function SingScreen({
             setProgress(0)
             setLiveSamples([])
             setError("unclear")
-            onUnclearRef.current()
           } else {
             onScoredRef.current(finalSamples)
           }
@@ -637,7 +627,7 @@ function SingScreen({
       "Microphone access is off. Allow it in your browser settings, then try again.",
     "no-device": "We couldn't find a microphone. Connect one and try again.",
     unclear:
-      "We couldn't hear a clear pitch. One more try, then this turn scores 0.",
+      "We couldn't hear a clear pitch, so this take doesn't count. Try again somewhere quieter.",
     interrupted: "The screen left the app mid-take. Sing it again.",
     generic: "The microphone couldn't start. Please try again.",
   }
@@ -841,7 +831,7 @@ function RoundResultScreen({
   onContinue: () => void
 }) {
   const line = lineForRound(state.round)
-  const winner = roundWinner(state)
+  const winner = state.roundWinner
   const matchOver = isMatchOver(state)
 
   return (
@@ -1005,24 +995,26 @@ export default function App() {
         )}
         {state.phase === "turnReady" && (
           <SingScreen
-            key={`${state.round}-${player}-${state.tieReplayUsed}-${state.firstSinger}`}
+            key={`${state.round}-${player}-${state.replays}`}
             line={line}
             round={state.round}
             playerLabel={displayName(state, player)}
             playerColor={PLAYER_COLORS[player]}
-            unclearAttempts={state.unclearAttempts[player]}
             getSession={getSession}
             onHome={goHome}
             onScored={(samples) => {
               const result = scoreTurn(line, samples)
+              const timing =
+                result.syllables.reduce((sum, s) => sum + s.timing, 0) /
+                Math.max(1, result.syllables.length)
               dispatch({
                 type: "TURN_SCORED",
                 score: result.score,
+                timing,
                 missed: result.missed,
                 samples,
               })
             }}
-            onUnclear={() => dispatch({ type: "TURN_UNCLEAR" })}
           />
         )}
         {state.phase === "handover" && (

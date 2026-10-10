@@ -5,20 +5,17 @@ import {
   displayName,
   matchReducer,
   normalizeName,
+  type MatchState,
 } from "@/domain/match"
 
-const p1Score = {
-  type: "TURN_SCORED" as const,
-  score: 80,
-  missed: [1],
-  samples: [],
-}
-
-const p2Score = {
-  type: "TURN_SCORED" as const,
-  score: 70,
-  missed: [2],
-  samples: [],
+function turn(score: number, timing = 0.8, missed: number[] = []) {
+  return {
+    type: "TURN_SCORED" as const,
+    score,
+    timing,
+    missed,
+    samples: [],
+  }
 }
 
 function started() {
@@ -26,6 +23,16 @@ function started() {
     type: "GO_SETUP",
   })
   return matchReducer(setup, { type: "START_MATCH" })
+}
+
+function playRound(
+  state: MatchState,
+  first: ReturnType<typeof turn>,
+  second: ReturnType<typeof turn>,
+) {
+  const afterFirst = matchReducer(state, first)
+  const ready = matchReducer(afterFirst, { type: "HANDOVER_DONE" })
+  return matchReducer(ready, second)
 }
 
 describe("matchReducer", () => {
@@ -44,7 +51,7 @@ describe("matchReducer", () => {
   })
 
   it("hides P1's score behind handover until P2 sings", () => {
-    const afterP1 = matchReducer(started(), p1Score)
+    const afterP1 = matchReducer(started(), turn(80))
     expect(afterP1.phase).toBe("handover")
     expect(afterP1.currentPlayer).toBe(1)
     expect(afterP1.turnScores[0]).toBe(80)
@@ -53,41 +60,43 @@ describe("matchReducer", () => {
     expect(readyP2.phase).toBe("turnReady")
     expect(readyP2.currentPlayer).toBe(1)
 
-    const afterP2 = matchReducer(readyP2, p2Score)
+    const afterP2 = matchReducer(readyP2, turn(70))
     expect(afterP2.phase).toBe("roundResult")
+    expect(afterP2.roundWinner).toBe(0)
     expect(afterP2.roundWins).toEqual([1, 0])
   })
 
-  it("replays a tied round once, then breaks the second tie", () => {
-    const afterP1 = matchReducer(started(), p1Score)
-    const readyP2 = matchReducer(afterP1, { type: "HANDOVER_DONE" })
-    const tied = matchReducer(readyP2, { ...p2Score, score: 80 })
+  it("replays a tied round once, then gives a second tie to better timing", () => {
+    const tied = playRound(started(), turn(80, 0.9), turn(80, 0.5))
     expect(tied.phase).toBe("turnReady")
-    expect(tied.tieReplayUsed).toBe(true)
+    expect(tied.replays).toBe(1)
     expect(tied.turnScores).toEqual([null, null])
     expect(tied.currentPlayer).toBe(0)
 
-    const replayP1 = matchReducer(tied, { ...p1Score, missed: [1, 2] })
-    const replayP2 = matchReducer(
-      matchReducer(replayP1, { type: "HANDOVER_DONE" }),
-      { ...p2Score, score: 80, missed: [1] },
-    )
-    expect(replayP2.phase).toBe("roundResult")
-    expect(replayP2.roundWins).toEqual([0, 1])
+    const decided = playRound(tied, turn(75, 0.6), turn(75, 0.9))
+    expect(decided.phase).toBe("roundResult")
+    expect(decided.roundWinner).toBe(1)
+    expect(decided.roundWins).toEqual([0, 1])
+  })
+
+  it("does not favor the first singer when score and timing both tie", () => {
+    const tied = playRound(started(), turn(80, 0.7), turn(80, 0.7))
+    const tiedAgain = playRound(tied, turn(80, 0.7), turn(80, 0.7))
+    expect(tiedAgain.phase).toBe("turnReady")
+    expect(tiedAgain.replays).toBe(2)
+    expect(tiedAgain.roundWins).toEqual([0, 0])
   })
 
   it("alternates who sings first and skips round 3 at 2-0", () => {
     let state = started()
-    const avaWinsTurn = () =>
-      matchReducer(state, {
-        ...p1Score,
-        score: state.currentPlayer === 0 ? 90 : 60,
-      })
     for (let round = 0; round < 2; round += 1) {
       expect(state.currentPlayer).toBe(round === 0 ? 0 : 1)
-      state = avaWinsTurn()
-      state = matchReducer(state, { type: "HANDOVER_DONE" })
-      state = avaWinsTurn()
+      const avaFirst = state.currentPlayer === 0
+      state = playRound(
+        state,
+        turn(avaFirst ? 90 : 60),
+        turn(avaFirst ? 60 : 90),
+      )
       expect(state.phase).toBe("roundResult")
       state = matchReducer(state, { type: "ROUND_CONTINUE" })
     }
@@ -96,20 +105,8 @@ describe("matchReducer", () => {
     expect(state.round).toBe(2)
   })
 
-  it("scores 0 after two unclear takes", () => {
-    let state = started()
-    state = matchReducer(state, { type: "TURN_UNCLEAR" })
-    expect(state.phase).toBe("turnReady")
-    state = matchReducer(state, { type: "TURN_UNCLEAR" })
-    expect(state.phase).toBe("handover")
-    expect(state.turnScores[0]).toBe(0)
-  })
-
   it("rematch keeps names and swaps who sings first", () => {
-    let state = started()
-    state = matchReducer(state, p1Score)
-    state = matchReducer(state, { type: "HANDOVER_DONE" })
-    state = matchReducer(state, p2Score)
+    let state = playRound(started(), turn(80), turn(70))
     state = matchReducer(state, { type: "ROUND_CONTINUE" })
     const rematch = matchReducer(state, { type: "REMATCH" })
     expect(rematch.phase).toBe("turnReady")

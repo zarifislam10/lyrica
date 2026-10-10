@@ -3,7 +3,6 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 
 export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
-export const MAX_UNCLEAR_ATTEMPTS = 2
 
 export type MatchPhase =
   | "home"
@@ -24,11 +23,13 @@ export type MatchState = {
   firstSinger: PlayerIndex
   currentPlayer: PlayerIndex
   turnScores: [number | null, number | null]
+  turnTiming: [number | null, number | null]
   turnMissed: [number[], number[]]
   turnSamples: [PitchSample[], PitchSample[]]
   roundWins: [number, number]
-  unclearAttempts: [number, number]
-  tieReplayUsed: boolean
+  roundWinner: PlayerIndex | null
+  // How many times the current round has been replayed after a tie.
+  replays: number
 }
 
 export type MatchAction =
@@ -38,10 +39,10 @@ export type MatchAction =
   | {
       type: "TURN_SCORED"
       score: number
+      timing: number
       missed: number[]
       samples: PitchSample[]
     }
-  | { type: "TURN_UNCLEAR" }
   | { type: "HANDOVER_DONE" }
   | { type: "ROUND_CONTINUE" }
   | { type: "REMATCH" }
@@ -51,9 +52,10 @@ export const PLAYER_COLORS: [string, string] = ["#FF4FA3", "#19B5FF"]
 
 const emptyTurn = {
   turnScores: [null, null] as [number | null, number | null],
+  turnTiming: [null, null] as [number | null, number | null],
   turnMissed: [[], []] as [number[], number[]],
   turnSamples: [[], []] as [PitchSample[], PitchSample[]],
-  unclearAttempts: [0, 0] as [number, number],
+  roundWinner: null,
 }
 
 export function loadStoredNames(): [string, string] {
@@ -103,7 +105,7 @@ export function createMatchState(
     firstSinger: 0,
     currentPlayer: 0,
     roundWins: [0, 0],
-    tieReplayUsed: false,
+    replays: 0,
     ...emptyTurn,
   }
 }
@@ -112,40 +114,34 @@ function otherPlayer(player: PlayerIndex): PlayerIndex {
   return player === 0 ? 1 : 0
 }
 
-function allMissed(round: RoundNumber): number[] {
-  return lineForRound(round).syllables.map((_, index) => index)
+function higher(a: number, b: number): PlayerIndex | null {
+  if (a === b) return null
+  return a > b ? 0 : 1
 }
 
-function decideRoundWinner(state: MatchState): PlayerIndex {
-  const [a, b] = state.turnScores
-  const scoreA = a ?? 0
-  const scoreB = b ?? 0
-  if (scoreA !== scoreB) return scoreA > scoreB ? 0 : 1
-  const missedA = state.turnMissed[0].length
-  const missedB = state.turnMissed[1].length
-  if (missedA !== missedB) return missedA < missedB ? 0 : 1
-  return state.firstSinger
-}
-
+// A tied score replays the round once. After that, the better timing score
+// wins; if timing is also equal, the round is replayed again.
 function afterBothSung(state: MatchState): MatchState {
-  const [scoreA, scoreB] = state.turnScores
-  const tied = (scoreA ?? 0) === (scoreB ?? 0)
+  const byScore = higher(state.turnScores[0] ?? 0, state.turnScores[1] ?? 0)
+  const byTiming =
+    state.replays > 0
+      ? higher(state.turnTiming[0] ?? 0, state.turnTiming[1] ?? 0)
+      : null
+  const winner = byScore ?? byTiming
 
-  if (tied && !state.tieReplayUsed) {
+  if (winner === null) {
     return {
       ...state,
       phase: "turnReady",
       currentPlayer: state.firstSinger,
-      tieReplayUsed: true,
+      replays: state.replays + 1,
       ...emptyTurn,
     }
   }
 
-  const winner = decideRoundWinner(state)
   const roundWins: [number, number] = [...state.roundWins]
   roundWins[winner] += 1
-
-  return { ...state, phase: "roundResult", roundWins }
+  return { ...state, phase: "roundResult", roundWins, roundWinner: winner }
 }
 
 export function isMatchOver(state: MatchState): boolean {
@@ -154,16 +150,18 @@ export function isMatchOver(state: MatchState): boolean {
   )
 }
 
-export function roundWinner(state: MatchState): PlayerIndex {
-  return decideRoundWinner(state)
-}
-
 function applyTurnScore(
   state: MatchState,
-  payload: { score: number; missed: number[]; samples: PitchSample[] },
+  payload: {
+    score: number
+    timing: number
+    missed: number[]
+    samples: PitchSample[]
+  },
 ): MatchState {
   const player = state.currentPlayer
   const turnScores: [number | null, number | null] = [...state.turnScores]
+  const turnTiming: [number | null, number | null] = [...state.turnTiming]
   const turnMissed: [number[], number[]] = [
     [...state.turnMissed[0]],
     [...state.turnMissed[1]],
@@ -173,15 +171,16 @@ function applyTurnScore(
     [...state.turnSamples[1]],
   ]
   turnScores[player] = payload.score
+  turnTiming[player] = payload.timing
   turnMissed[player] = payload.missed
   turnSamples[player] = payload.samples
 
   const next: MatchState = {
     ...state,
     turnScores,
+    turnTiming,
     turnMissed,
     turnSamples,
-    unclearAttempts: [0, 0],
   }
 
   const opponent = otherPlayer(player)
@@ -220,22 +219,6 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
     case "TURN_SCORED":
       if (state.phase !== "turnReady") return state
       return applyTurnScore(state, action)
-    case "TURN_UNCLEAR": {
-      if (state.phase !== "turnReady") return state
-      const unclearAttempts: [number, number] = [...state.unclearAttempts]
-      unclearAttempts[state.currentPlayer] += 1
-      if (unclearAttempts[state.currentPlayer] >= MAX_UNCLEAR_ATTEMPTS) {
-        return applyTurnScore(
-          { ...state, unclearAttempts },
-          {
-            score: 0,
-            missed: allMissed(state.round),
-            samples: [],
-          },
-        )
-      }
-      return { ...state, unclearAttempts }
-    }
     case "HANDOVER_DONE":
       if (state.phase !== "handover") return state
       return { ...state, phase: "turnReady" }
@@ -250,7 +233,7 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
         round: nextRound,
         firstSinger,
         currentPlayer: firstSinger,
-        tieReplayUsed: false,
+        replays: 0,
         ...emptyTurn,
       }
     }
@@ -272,6 +255,6 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
 }
 
 export function fallbackCommentary(state: MatchState): string {
-  const winner = decideRoundWinner(state)
-  return `${displayName(state, winner)} takes round ${state.round}`
+  if (state.roundWinner === null) return `Round ${state.round} is done`
+  return `${displayName(state, state.roundWinner)} takes round ${state.round}`
 }
