@@ -4,13 +4,16 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
 
-export type MatchPhase = "home" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
+export type MatchPhase = "home" | "mode" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
+
+export type GameMode = "solo" | "battle"
 
 export type PlayerIndex = 0 | 1
 export type RoundNumber = 1 | 2 | 3
 
 export type MatchState = {
   phase: MatchPhase
+  mode: GameMode
   names: [string, string]
   round: RoundNumber
   openingSinger: PlayerIndex
@@ -24,9 +27,14 @@ export type MatchState = {
   roundWinner: PlayerIndex | null
   // How many times the current round has been replayed after a tie.
   replays: number
+  // Solo only: the Tune score of each finished round, in order.
+  soloScores: number[]
 }
 
-export type MatchAction = { type: "GO_SETUP" } | {
+export type MatchAction = { type: "GO_MODE" } | {
+  type: "CHOOSE_MODE"
+  mode: GameMode
+} | {
   type: "SET_NAME"
   player: PlayerIndex
   name: string
@@ -76,7 +84,7 @@ export function normalizeName(name: string, player: PlayerIndex): string {
 }
 
 export function displayName(state: MatchState, player: PlayerIndex): string {
-  if (state.names[0] === state.names[1]) {
+  if (state.mode === "battle" && state.names[0] === state.names[1]) {
     return `${state.names[player]} ${player + 1}`
   }
   return state.names[player]
@@ -88,9 +96,11 @@ export function lineForRound(round: RoundNumber): PracticeLine {
 
 export function createMatchState(
   names: [string, string] = ["", ""],
+  mode: GameMode = "battle",
 ): MatchState {
   return {
     phase: "home",
+    mode,
     names,
     round: 1,
     openingSinger: 0,
@@ -98,8 +108,15 @@ export function createMatchState(
     currentPlayer: 0,
     roundWins: [0, 0],
     replays: 0,
+    soloScores: [],
     ...emptyTurn,
   }
+}
+
+export function soloTotal(state: MatchState): number {
+  if (state.soloScores.length === 0) return 0
+  const sum = state.soloScores.reduce((total, score) => total + score, 0)
+  return Math.round(sum / state.soloScores.length)
 }
 
 function otherPlayer(player: PlayerIndex): PlayerIndex {
@@ -137,6 +154,7 @@ function afterBothSung(state: MatchState): MatchState {
 }
 
 export function isMatchOver(state: MatchState): boolean {
+  if (state.mode === "solo") return state.round === 3
   return state.roundWins[0] >= 2 || state.roundWins[1] >= 2 || state.round === 3
 }
 
@@ -173,6 +191,14 @@ function applyTurnScore(
     turnSamples,
   }
 
+  if (state.mode === "solo") {
+    return {
+      ...next,
+      phase: "roundResult",
+      soloScores: [...state.soloScores, payload.score],
+    }
+  }
+
   const opponent = otherPlayer(player)
   if (next.turnScores[opponent] == null) {
     return {
@@ -189,8 +215,10 @@ export function matchReducer(
   action: MatchAction,
 ): MatchState {
   switch (action.type) {
-    case "GO_SETUP":
-      return { ...state, phase: "setup" }
+    case "GO_MODE":
+      return { ...state, phase: "mode" }
+    case "CHOOSE_MODE":
+      return { ...state, phase: "setup", mode: action.mode }
     case "SET_NAME": {
       const names: [string, string] = [...state.names]
       names[action.player] = action.name.slice(0, MAX_NAME_LENGTH)
@@ -203,7 +231,7 @@ export function matchReducer(
       ]
       persistNames(state.names)
       return {
-        ...createMatchState(names),
+        ...createMatchState(names, state.mode),
         phase: "turnReady",
         firstSinger: 0,
         currentPlayer: 0,
@@ -219,7 +247,8 @@ export function matchReducer(
       if (state.phase !== "roundResult") return state
       if (isMatchOver(state)) return { ...state, phase: "final" }
       const nextRound = (state.round + 1) as RoundNumber
-      const firstSinger = otherPlayer(state.firstSinger)
+      const firstSinger =
+        state.mode === "solo" ? 0 : otherPlayer(state.firstSinger)
       return {
         ...state,
         phase: "turnReady",
@@ -231,9 +260,10 @@ export function matchReducer(
       }
     }
     case "REMATCH": {
-      const opener = otherPlayer(state.openingSinger)
+      const opener =
+        state.mode === "solo" ? 0 : otherPlayer(state.openingSinger)
       return {
-        ...createMatchState(state.names),
+        ...createMatchState(state.names, state.mode),
         phase: "turnReady",
         openingSinger: opener,
         firstSinger: opener,
@@ -248,6 +278,9 @@ export function matchReducer(
 }
 
 export function fallbackCommentary(state: MatchState): string {
+  if (state.mode === "solo") {
+    return `${displayName(state, 0)} finishes round ${state.round}`
+  }
   if (state.roundWinner === null) return `Round ${state.round} is done`
   return `${displayName(state, state.roundWinner)} takes round ${state.round}`
 }
