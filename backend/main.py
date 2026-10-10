@@ -8,10 +8,23 @@ from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 from elevenlabs.core.api_error import ApiError
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
+
+from round_result import router as round_result_router
 
 load_dotenv(Path(__file__).with_name(".env"))
 
 app = FastAPI(title="Lyrica Backend")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:8443,http://127.0.0.1:8443,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",") if origin.strip()],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+app.include_router(round_result_router)
 WELCOME_TEXT = "Welcome to Lyrica! Round one starts now!"
 
 

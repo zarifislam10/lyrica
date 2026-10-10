@@ -1,0 +1,9 @@
+{
+  "round": 1,
+  "lineId": "1",
+  "players": [
+    {"id": "p1", "name": "Laiba", "score": 85, "missedSyllables": []},
+    {"id": "p2", "name": "Zarif", "score": 72, "missedSyllables": ["녕"]}
+  ],
+  "winnerId": "p1"
+}
