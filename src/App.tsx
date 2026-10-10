@@ -12,6 +12,8 @@ import {
   matchReducer,
   type MatchState,
 } from "@/domain/match"
+import { buildRoundResultPayload } from "@/domain/announcer"
+import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
@@ -23,6 +25,11 @@ import {
   unlockAudio,
   type AudioSession,
 } from "@/services/audioSession"
+import {
+  fetchAnnouncement,
+  isFallbackForced,
+  setFallbackForced,
+} from "@/services/announcer"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
 import { createPitchDetector } from "@/services/pitch"
 
@@ -33,12 +40,6 @@ const DURATION = 4
 const COUNT_IN_BEATS = 3
 const COUNT_IN_INTERVAL = 0.7
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
-// Treat a recording as "unclear" if fewer than this fraction of recorded frames
-// passed the clarity threshold.
-const MIN_CLARITY_FRAME_RATIO = 0.15
-// Approximate frames-per-second produced by the rAF pitch loop; used to size
-// the "expected frames" denominator for the unclear check.
-const APPROX_FRAMES_PER_SECOND = 60
 // Shared lane scale: 50% is the line's reference pitch, every semitone away
 // from it moves this many percent of lane height.
 const LANE_PERCENT_PER_SEMITONE = 6
@@ -579,13 +580,12 @@ function SingScreen({
         setProgress(nextProgress)
         if (now >= recordEnd) {
           const finalSamples = samplesRef.current
-          const expectedFrames = Math.max(
-            1,
-            Math.floor(DURATION * APPROX_FRAMES_PER_SECOND),
+          const unclear = isUnclearTake(
+            finalSamples.length,
+            detector.framesAnalyzed(),
           )
-          const clarityRatio = finalSamples.length / expectedFrames
           cleanup()
-          if (clarityRatio < MIN_CLARITY_FRAME_RATIO) {
+          if (unclear) {
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
@@ -817,6 +817,57 @@ function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   }
 }
 
+type AnnouncerStatus = "loading" | "live" | "fallback"
+
+// Asks the backend for commentary once per round result. Scores never wait on
+// it: the built-in line shows until a live reply arrives, and stays on failure.
+function useAnnouncement(state: MatchState) {
+  const [status, setStatus] = useState<AnnouncerStatus>("loading")
+  const [commentary, setCommentary] = useState<string | null>(null)
+  const [needsTap, setNeedsTap] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const payloadRef = useRef(buildRoundResultPayload(state))
+
+  useEffect(() => {
+    const controller = new AbortController()
+    // Deferred so StrictMode's throwaway mount never sends a paid request.
+    const start = setTimeout(() => {
+      void fetchAnnouncement(payloadRef.current, controller.signal).then(
+        (result) => {
+          if (controller.signal.aborted) return
+          if (!result) {
+            setStatus("fallback")
+            return
+          }
+          setCommentary(result.commentary)
+          setStatus("live")
+          const audio = new Audio(result.audioUrl)
+          audioRef.current = audio
+          audio.play().catch(() => setNeedsTap(true))
+        },
+      )
+    }, 0)
+    return () => {
+      clearTimeout(start)
+      controller.abort()
+      audioRef.current?.pause()
+      audioRef.current = null
+    }
+  }, [])
+
+  const playAudio = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.currentTime = 0
+    void audio
+      .play()
+      .then(() => setNeedsTap(false))
+      .catch(() => setNeedsTap(true))
+  }
+
+  return { status, commentary, needsTap, playAudio }
+}
+
 function RoundResultScreen({
   state,
   onHome,
@@ -829,6 +880,8 @@ function RoundResultScreen({
   const line = lineForRound(state.round)
   const winner = state.roundWinner
   const matchOver = isMatchOver(state)
+  const announcer = useAnnouncement(state)
+  const [forceFallback, setForceFallback] = useState(isFallbackForced)
 
   return (
     <main className="screen result-screen">
@@ -863,7 +916,23 @@ function RoundResultScreen({
           })}
         </div>
 
-        <p className="commentary-line">{fallbackCommentary(state)}</p>
+        <div className="announcer" aria-live="polite">
+          <p className="commentary-line">
+            {announcer.commentary ?? fallbackCommentary(state)}
+          </p>
+          {announcer.status === "loading" && (
+            <p className="announcer-status">Announcer is on the mic…</p>
+          )}
+          {announcer.needsTap && (
+            <button
+              className="announcer-play"
+              type="button"
+              onClick={announcer.playAudio}
+            >
+              <SpeakerIcon /> Play announcer
+            </button>
+          )}
+        </div>
 
         {([0, 1] as const).map((player) => (
           <div key={player}>
@@ -905,6 +974,26 @@ function RoundResultScreen({
           <span>→</span>
         </button>
       </div>
+
+      {import.meta.env.DEV && (
+        <details className="state-preview">
+          <summary>Announcer (dev)</summary>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={forceFallback}
+                onChange={(event) => {
+                  setFallbackForced(event.target.checked)
+                  setForceFallback(event.target.checked)
+                }}
+              />{" "}
+              Force fallback from next round
+            </label>
+            <span>Status: {announcer.status}</span>
+          </div>
+        </details>
+      )}
     </main>
   )
 }
