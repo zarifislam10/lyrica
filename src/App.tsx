@@ -13,6 +13,7 @@ import {
   type MatchState,
 } from "@/domain/match"
 import { buildRoundResultPayload } from "@/domain/announcer"
+import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
@@ -39,12 +40,6 @@ const DURATION = 4
 const COUNT_IN_BEATS = 3
 const COUNT_IN_INTERVAL = 0.7
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
-// Treat a recording as "unclear" if fewer than this fraction of recorded frames
-// passed the clarity threshold.
-const MIN_CLARITY_FRAME_RATIO = 0.15
-// Approximate frames-per-second produced by the rAF pitch loop; used to size
-// the "expected frames" denominator for the unclear check.
-const APPROX_FRAMES_PER_SECOND = 60
 // Shared lane scale: 50% is the line's reference pitch, every semitone away
 // from it moves this many percent of lane height.
 const LANE_PERCENT_PER_SEMITONE = 6
@@ -585,13 +580,12 @@ function SingScreen({
         setProgress(nextProgress)
         if (now >= recordEnd) {
           const finalSamples = samplesRef.current
-          const expectedFrames = Math.max(
-            1,
-            Math.floor(DURATION * APPROX_FRAMES_PER_SECOND),
+          const unclear = isUnclearTake(
+            finalSamples.length,
+            detector.framesAnalyzed(),
           )
-          const clarityRatio = finalSamples.length / expectedFrames
           cleanup()
-          if (clarityRatio < MIN_CLARITY_FRAME_RATIO) {
+          if (unclear) {
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
