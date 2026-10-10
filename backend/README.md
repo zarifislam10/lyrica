@@ -151,3 +151,38 @@ before the demo. A full live Gemini + ElevenLabs call requires both valid keys.
 
 Provider references: [Gemini](https://ai.google.dev/api) and
 [ElevenLabs](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
+
+## Generating the songs (offline, before the demo)
+
+`generate_songs.py` turns `songs/lyrics.json` into the clips and scoring data the
+battle uses. It runs on your machine, not on the server, and its outputs are committed.
+
+```sh
+python -m pip install -r requirements-songs.txt
+python generate_songs.py          # all songs
+python generate_songs.py ko-1     # one song
+```
+
+Per song it:
+
+1. composes a 10-second clip from the lyrics with the ElevenLabs Music API
+   → `public/songs/<id>.mp3`
+2. splits out the vocals (`two_stems_v1`) → `public/songs/<id>-vocals.mp3`
+3. force-aligns the lyrics to the vocals for per-syllable timings
+4. detects pitch on the vocals for each syllable's target semitones
+5. writes `src/data/songs.generated.ts`, which `src/data/songs.ts` reads
+
+Steps 1–2 spend credits. Existing mp3s are reused, so re-running only redoes
+alignment and pitch; pass `--force` to regenerate audio. You can also drop in your
+own `<id>.mp3` / `<id>-vocals.mp3` and the script will only time and pitch them.
+Intermediate results (compose metadata, alignment) are cached in `songs/generated/`.
+
+Editing lyrics: three lines per song. Korean needs a `romanization` with one
+hyphenated part per Hangul block (`"byeol-bit a-rae-seo"`). For English and Spanish,
+hyphens mark syllable breaks (`"can-ta con-mi-go"`) and are hidden in the app.
+Keep lines short (about 3–5 syllables) so they fit about 3 seconds each. Lyrics must
+be original; do not name real artists or songs in the styles.
+
+Listen to every clip before committing: the scorer can only be as good as the
+generated melody. Warnings about borrowed pitches mean a syllable was unclear in
+the vocals stem; regenerate that song if there are several.

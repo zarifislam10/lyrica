@@ -1,0 +1,6 @@
+# Offline song pipeline only (generate_songs.py); the API server doesn't need these.
+# numpy: YIN pitch detection on the vocals stem.
+# soundfile: decodes the MP3 stems (bundled libsndfile, so no ffmpeg install).
+-r requirements.txt
+numpy==2.5.4
+soundfile==0.14.0

@@ -1,3 +1,4 @@
+import { generatedSongs } from "@/data/songs.generated"
 import type { Language, Song, SongLine } from "@/domain/types"
 
 export const CLIP_SECONDS = 10
@@ -35,9 +36,14 @@ function pendingSong(id: string, title: string, language: Language): Song {
   }
 }
 
-// TODO: replace titles and lines once the ElevenLabs clips and lyrics land.
-export const songs: Song[] = [
+const slots = [
   pendingSong("en-1", "English song", "en"),
   pendingSong("ko-1", "Korean song", "ko"),
   pendingSong("es-1", "Spanish song", "es"),
 ]
+
+// Each slot uses its generated song once backend/generate_songs.py has run
+// for it, and stays a placeholder until then.
+export const songs: Song[] = slots.map(
+  (slot) => generatedSongs.find((song) => song.id === slot.id) ?? slot,
+)
