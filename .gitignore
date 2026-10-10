@@ -21,3 +21,8 @@ logs/
 /.opencode-skills/
 .env
 .env.local
+
+!.env.example
+backend/.venv/
+__pycache__/
+*.pyc
