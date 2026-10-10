@@ -20,7 +20,7 @@ export default function HandoverScreen({
           />
           Round {state.round}
         </p>
-        <h1>Pass the phone to {displayName(state, next)}</h1>
+        <h1>Pass the mic to {displayName(state, next)}</h1>
         <p className="handover-copy">
           {displayName(state, previous)} is done. Keep that score hidden until
           both of you have sung.

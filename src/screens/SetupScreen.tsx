@@ -122,7 +122,7 @@ export default function SetupScreen({
     <main className="screen setup-screen">
       <header className="screen-header">
         <Brand />
-        <p>Two players · one phone</p>
+        <p>Two players · one device</p>
       </header>
 
       <section className="setup-content">
