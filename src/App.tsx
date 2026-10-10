@@ -1,23 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import type { PitchSample } from "@/domain/types"
+import { practiceLines } from "@/data/lines"
+import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
+import type { PitchSample, PracticeLine } from "@/domain/types"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
 import { createPitchDetector } from "@/services/pitch"
-
-type Syllable = {
-  hangul: string
-  roman: string
-  start: number
-  end: number
-  pitch: number
-}
-
-type PracticeLine = {
-  id: number
-  hangul: string
-  romanization: string
-  syllables: Syllable[]
-}
 
 type Screen = "home" | "pick" | "sing" | "result"
 type SingState = "ready" | "starting" | "counting" | "recording"
@@ -33,55 +20,16 @@ const MIN_CLARITY_FRAME_RATIO = 0.15
 // Approximate frames-per-second produced by the rAF pitch loop; used to size
 // the "expected frames" denominator for the unclear check.
 const APPROX_FRAMES_PER_SECOND = 60
-// Lane coordinate space: target bars live at pitch% 0..100 (bottom offset).
-// Fold a MIDI note into this range by octaves so low/high voices stay visible.
-const LANE_PITCH_MIN = 40
-const LANE_PITCH_MAX = 84
+// Shared lane scale: 50% is the line's reference pitch, every semitone away
+// from it moves this many percent of lane height.
+const LANE_PERCENT_PER_SEMITONE = 6
+const LANE_MIN_PERCENT = 0
+const LANE_MAX_PERCENT = 100
 
-function foldPitchForLane(midi: number): number {
-  let value = midi
-  while (value < LANE_PITCH_MIN) value += 12
-  while (value > LANE_PITCH_MAX) value -= 12
-  return value
+function laneBottomPercent(semitones: number): number {
+  const raw = 50 + semitones * LANE_PERCENT_PER_SEMITONE
+  return Math.max(LANE_MIN_PERCENT, Math.min(LANE_MAX_PERCENT, raw))
 }
-
-const practiceLines: PracticeLine[] = [
-  {
-    id: 1,
-    hangul: "안녕하세요",
-    romanization: "an-nyeong-ha-se-yo",
-    syllables: [
-      { hangul: "안", roman: "an", start: 0, end: 0.58, pitch: 52 },
-      { hangul: "녕", roman: "nyeong", start: 0.7, end: 1.48, pitch: 67 },
-      { hangul: "하", roman: "ha", start: 1.6, end: 2.22, pitch: 59 },
-      { hangul: "세", roman: "se", start: 2.36, end: 3.08, pitch: 74 },
-      { hangul: "요", roman: "yo", start: 3.2, end: 4, pitch: 62 },
-    ],
-  },
-  {
-    id: 2,
-    hangul: "사랑해요",
-    romanization: "sa-rang-hae-yo",
-    syllables: [
-      { hangul: "사", roman: "sa", start: 0, end: 0.72, pitch: 48 },
-      { hangul: "랑", roman: "rang", start: 0.86, end: 1.76, pitch: 63 },
-      { hangul: "해", roman: "hae", start: 1.9, end: 2.92, pitch: 72 },
-      { hangul: "요", roman: "yo", start: 3.08, end: 4, pitch: 59 },
-    ],
-  },
-  {
-    id: 3,
-    hangul: "감사합니다",
-    romanization: "gam-sa-ham-ni-da",
-    syllables: [
-      { hangul: "감", roman: "gam", start: 0, end: 0.63, pitch: 55 },
-      { hangul: "사", roman: "sa", start: 0.75, end: 1.37, pitch: 67 },
-      { hangul: "합", roman: "ham", start: 1.5, end: 2.26, pitch: 61 },
-      { hangul: "니", roman: "ni", start: 2.4, end: 3.13, pitch: 76 },
-      { hangul: "다", roman: "da", start: 3.26, end: 4, pitch: 64 },
-    ],
-  },
-]
 
 function MicIcon() {
   return (
@@ -252,21 +200,23 @@ function LyricSyllables({
   line,
   activeIndex = -1,
   result = false,
+  missed = [],
 }: {
   line: PracticeLine
   activeIndex?: number
   result?: boolean
+  missed?: number[]
 }) {
   return (
     <div className={`lyric-grid ${line.syllables.length === 4 ? "four" : ""}`}>
       {line.syllables.map((syllable, index) => {
-        const missed = result && (index === 1 || index === 2)
+        const isMissed = missed.includes(index)
         return (
           <div
             className={[
               "syllable",
               activeIndex === index ? "active" : "",
-              result ? (missed ? "missed" : "matched") : "",
+              result ? (isMissed ? "missed" : "matched") : "",
             ].join(" ")}
             key={`${line.id}-${syllable.hangul}`}
           >
@@ -279,34 +229,28 @@ function LyricSyllables({
   )
 }
 
-function voicePath(line: PracticeLine) {
-  const points: string[] = []
-  const toX = (time: number) => 8 + (time / DURATION) * 304
-  const toY = (pitch: number) => 116 - pitch
-
-  line.syllables.forEach((syllable, index) => {
-    const start = index === 1 ? syllable.start + 0.22 : syllable.start
-    const pitch =
-      index === 2 ? syllable.pitch - 20 : syllable.pitch + (index % 2 ? -2 : 2)
-    const endPitch = index === 2 ? pitch - 12 : pitch + 1
-    points.push(
-      `${toX(start)},${toY(pitch)}`,
-      `${toX((start + syllable.end) / 2)},${toY(pitch + 2)}`,
-      `${toX(syllable.end)},${toY(endPitch)}`,
-    )
-  })
-
-  return points.join(" ")
+// Maps a semitone offset (bar) or a sample's pitch-relative-to-the-singer's-
+// median (voice) to the SVG y coordinate used by `.voice-line`.
+function laneYFromSemitones(semitones: number): number {
+  const percent = Math.max(
+    LANE_MIN_PERCENT,
+    Math.min(LANE_MAX_PERCENT, 50 + semitones * LANE_PERCENT_PER_SEMITONE),
+  )
+  return 116 - percent
 }
 
-function samplesPath(samples: PitchSample[], durationMs: number) {
+function samplesPath(
+  samples: PitchSample[],
+  durationMs: number,
+  singerMedian: number,
+): string {
   if (samples.length === 0) return ""
   const points: string[] = []
   for (const sample of samples) {
     const t = Math.max(0, Math.min(1, sample.timeMs / durationMs))
-    const folded = foldPitchForLane(sample.pitch)
+    const semitones = sample.pitch - singerMedian
     const x = 8 + t * 304
-    const y = 116 - folded
+    const y = laneYFromSemitones(semitones)
     points.push(`${x.toFixed(2)},${y.toFixed(2)}`)
   }
   return points.join(" ")
@@ -319,6 +263,7 @@ function PitchLane({
   result = false,
   samples,
   durationMs = DURATION * 1000,
+  missed = [],
 }: {
   line: PracticeLine
   progress?: number
@@ -326,12 +271,15 @@ function PitchLane({
   result?: boolean
   samples?: PitchSample[]
   durationMs?: number
+  missed?: number[]
 }) {
   const clipWidth = Math.max(0, Math.min(1, progress)) * 320
-  const hasRealSamples = samples !== undefined
-  const voicePoints = hasRealSamples
-    ? samplesPath(samples, durationMs)
-    : voicePath(line)
+  const singerMedian =
+    samples && samples.length > 0 ? timeWeightedMedianPitch(samples) : null
+  const voicePoints =
+    samples && singerMedian !== null
+      ? samplesPath(samples, durationMs, singerMedian)
+      : ""
 
   return (
     <div className="pitch-lane" aria-label="Target pitch lane">
@@ -362,12 +310,12 @@ function PitchLane({
           <div key={`${syllable.hangul}-pitch`}>
             <div
               className={`target-bar ${
-                result && (index === 1 || index === 2) ? "missed" : ""
+                result && missed.includes(index) ? "missed" : ""
               }`}
               style={{
                 left: `${left}%`,
                 width: `${width}%`,
-                bottom: `${syllable.pitch}%`,
+                bottom: `${laneBottomPercent(syllable.semitones)}%`,
               }}
             />
             <span
@@ -844,6 +792,29 @@ function SingScreen({
   )
 }
 
+function joinWithAnd(parts: string[]): string {
+  if (parts.length <= 1) return parts.join("")
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`
+}
+
+function buildCoachCopy(
+  line: PracticeLine,
+  missed: number[],
+): { heading: string; body: string } {
+  if (missed.length === 0) {
+    return { heading: "Nice and steady", body: "Clean take." }
+  }
+  const parts = missed.map((i) => {
+    const s = line.syllables[i]
+    return `${s.hangul} (${s.roman})`
+  })
+  return {
+    heading: "A couple to clean up",
+    body: `Try again on ${joinWithAnd(parts)}.`,
+  }
+}
+
 function ResultScreen({
   line,
   samples,
@@ -859,6 +830,12 @@ function ResultScreen({
 }) {
   const [tipPlaying, setTipPlaying] = useState(false)
 
+  const result = useMemo(() => scoreTurn(line, samples), [line, samples])
+  const coach = useMemo(
+    () => buildCoachCopy(line, result.missed),
+    [line, result.missed],
+  )
+
   return (
     <main className="screen result-screen">
       <CornerDots />
@@ -873,18 +850,19 @@ function ResultScreen({
           />
           <p>Nice work</p>
           <div>
-            <strong>62</strong>
+            <strong>{result.score}</strong>
             <span>match</span>
           </div>
         </div>
 
-        <LyricSyllables line={line} result />
+        <LyricSyllables line={line} result missed={result.missed} />
         <PitchLane
           line={line}
           progress={1}
           showVoice
           result
           samples={samples}
+          missed={result.missed}
         />
 
         <div className="legend">
@@ -900,7 +878,7 @@ function ResultScreen({
           <div className="coach-heading">
             <div>
               <span>COACH TIP</span>
-              <h2>Keep the note lifted</h2>
+              <h2>{coach.heading}</h2>
             </div>
             <button
               onClick={() => setTipPlaying((playing) => !playing)}
@@ -909,10 +887,7 @@ function ResultScreen({
               <SpeakerIcon />
             </button>
           </div>
-          <p>
-            You came in late on the second syllable and let the third one drop.
-            Hold it high for the whole bar.
-          </p>
+          <p>{coach.body}</p>
           {tipPlaying && (
             <div className="audio-waves" aria-label="Playing tip">
               {[9, 18, 12, 22, 15, 8, 18, 11, 20, 9, 15, 7].map(
