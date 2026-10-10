@@ -1558,6 +1558,46 @@ button:focus-visible {
   text-align: center;
 }
 
+.announcer {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.announcer-status {
+  margin: 0;
+  color: #c4b5c9;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.announcer-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #19b5ff;
+  color: #fff;
+  background: #17101c;
+  font-family: "Syne", sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.announcer-play svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
 .scoreboard-row {
   display: flex;
   justify-content: space-between;
