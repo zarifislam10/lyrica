@@ -142,7 +142,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 - One-device battle loop (`src/domain/match.ts`, `src/screens/`, `src/services/audioSession.ts`) — PR #5.
 
 **In flight:**
-- `laiba-songs` (pushed, PR not opened): replaces `src/data/lines.ts` with `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, per-line `audioStart`/`audioEnd`. Target notes typed by hand as semitones. Threads a selected `Song` into match state.
+- `laiba-songs`: `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, melody typed once as semitones. `Syllable`/`PracticeLine` now use `text`/`romanization` for every language. Not yet done: `song` in match state, song picker, switching the app off `lines.ts`.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
 
 ## Current task owners
@@ -165,7 +165,7 @@ Prioritized. Work each on its own branch off latest `main`. Open one PR per item
    - Add a dev-only toggle (`import.meta.env.DEV`) to force the fallback path for testing.
 3. **Wire the "Hear it" button on the sing screen.**
    - Blocked until `laiba-songs` lands, since it needs `audioUrl` + `audioStart`/`audioEnd` on each `PracticeLine`.
-   - Use a plain `<audio>` ref. Seek to `audioStart`, play, pause at `audioEnd`.
+   - Use a plain `<audio>` ref. If the line has `audioStart`/`audioEnd`, seek to `audioStart`, play, pause at `audioEnd`; otherwise play the whole clip (Happy Birthday clips speak one line).
    - Pause and reset on record start.
 4. **UI slot for the Words score.** Reserve the layout slot now, but render only "Words — coming soon" (no number) until the `ml/` probe PASSes. Do **not** compute, fake, or stub a Words number.
 5. **Reconcile with `laiba-songs` when it lands.**

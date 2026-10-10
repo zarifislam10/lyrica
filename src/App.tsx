@@ -3,6 +3,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { practiceLines } from "@/data/lines"
 import {
   PLAYER_COLORS,
+  TURN_SECONDS,
   createMatchState,
   displayName,
   fallbackCommentary,
@@ -15,6 +16,7 @@ import {
   type PlayerIndex,
 } from "@/domain/match"
 import { buildRoundResultPayload } from "@/domain/announcer"
+import { syllableDisplayTexts } from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { PitchSample, PracticeLine } from "@/domain/types"
@@ -38,7 +40,7 @@ import { createPitchDetector } from "@/services/pitch"
 type SingState = "ready" | "starting" | "counting" | "recording"
 type ErrorKind = "blocked" | "no-device" | "unclear" | "interrupted" | "generic" | null
 
-const DURATION = 4
+const DURATION = TURN_SECONDS
 const COUNT_IN_BEATS = 3
 const COUNT_IN_INTERVAL = 0.7
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
@@ -229,6 +231,7 @@ function LyricSyllables({
   result?: boolean
   missed?: number[]
 }) {
+  const texts = syllableDisplayTexts(line)
   return (
     <div className={`lyric-grid ${line.syllables.length === 4 ? "four" : ""}`}>
       {line.syllables.map((syllable, index) => {
@@ -240,10 +243,12 @@ function LyricSyllables({
               activeIndex === index ? "active" : "",
               result ? (isMissed ? "missed" : "matched") : "",
             ].join(" ")}
-            key={`${line.id}-${syllable.hangul}`}
+            key={`${line.id}-${index}`}
           >
-            <span className="hangul">{syllable.hangul}</span>
-            <span className="roman">{syllable.roman}</span>
+            <span className="hangul">{texts[index]}</span>
+            {syllable.romanization && (
+              <span className="roman">{syllable.romanization}</span>
+            )}
           </div>
         )
       })}
@@ -329,7 +334,7 @@ function PitchLane({
         const left = (syllable.start / DURATION) * 100
         const width = ((syllable.end - syllable.start) / DURATION) * 100
         return (
-          <div key={`${syllable.hangul}-pitch`}>
+          <div key={`${line.id}-${index}-pitch`}>
             <div
               className={`target-bar ${
                 result && missed.includes(index) ? "missed" : ""
@@ -347,7 +352,7 @@ function PitchLane({
                 width: `${width}%`,
               }}
             >
-              {syllable.roman}
+              {syllable.romanization ?? syllable.text}
             </span>
           </div>
         )
@@ -863,7 +868,7 @@ function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   }
   const parts = missed.map((i) => {
     const s = line.syllables[i]
-    return `${s.hangul} (${s.roman})`
+    return s.romanization ? `${s.text} (${s.romanization})` : s.text
   })
   return {
     heading: "A couple to clean up",

@@ -24,7 +24,7 @@ export function buildRoundResultPayload(state: MatchState): RoundResultPayload {
     name: displayName(state, index),
     score: state.turnScores[index] ?? 0,
     missedSyllables: state.turnMissed[index]
-      .map((i) => line.syllables[i]?.hangul)
+      .map((i) => line.syllables[i]?.text)
       .filter((text): text is string => Boolean(text)),
   })
   return {

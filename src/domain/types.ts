@@ -10,20 +10,12 @@ export type TurnRecording = {
   samples: PitchSample[]
 }
 
-export type Syllable = {
-  hangul: string
-  roman: string
-  start: number
-  end: number
-  semitones: number
-}
-
 export type Language = "en" | "ko" | "ar"
 
-// One sung unit on one note: an English syllable, a Hangul block, or an
-// Arabic syllable. Times are seconds from the start of the line, so they line
-// up with the recording timeline the scorer uses.
-export type SongSyllable = {
+// One sung unit: an English syllable, a Hangul block, or an Arabic syllable.
+// Times are seconds from the start of the line, so they line up with the
+// recording timeline the scorer uses.
+export type Syllable = {
   text: string
   // Korean and Arabic only; English shows `text` alone.
   romanization?: string
@@ -35,32 +27,24 @@ export type SongSyllable = {
 }
 
 // One round. audioStart/audioEnd locate this line in the song's spoken
-// "Hear it" clip; they stay unset until that clip is generated.
-export type SongLine = {
+// "Hear it" clip; when unset, "Hear it" plays the whole clip.
+export type PracticeLine = {
   id: number
   text: string
   romanization?: string
   audioStart?: number
   audioEnd?: number
-  syllables: SongSyllable[]
+  syllables: Syllable[]
 }
 
 export type Song = {
   id: string
   title: string
   language: Language
-  // ElevenLabs TTS render of the lines, served from /public/songs/<id>.mp3.
+  // ElevenLabs TTS render of the line, served from /public/songs/<id>.mp3.
   audioUrl: string
   // Set until a native speaker confirms the syllable-to-note mapping.
   needsNativeSpeakerCheck: boolean
   // Exactly three: one per round.
-  lines: SongLine[]
-}
-
-export type PracticeLine = {
-  id: number
-  language: "ko"
-  hangul: string
-  romanization: string
-  syllables: Syllable[]
+  lines: PracticeLine[]
 }

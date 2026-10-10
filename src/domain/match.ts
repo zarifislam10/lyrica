@@ -3,6 +3,9 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 
 export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
+// Length of one recorded turn. Every line's last syllable must end inside it,
+// or that syllable can't be sung in time and is always scored as missed.
+export const TURN_SECONDS = 4
 
 export type MatchPhase = "home" | "mode" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
 
