@@ -1611,6 +1611,79 @@ button:focus-visible {
   gap: 12px;
 }
 
+.mode-options {
+  display: grid;
+  gap: 14px;
+}
+
+.mode-card {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid #3a2e40;
+  color: #fff8ff;
+  background: #17101c;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.mode-card:hover,
+.mode-card:focus-visible {
+  border-color: #ff4fa3;
+  transform: translateY(-2px);
+}
+
+.mode-card strong {
+  font-family: "Syne", sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.mode-card span {
+  color: #c4b5c9;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.change-mode-button {
+  padding: 0;
+  border: 0;
+  color: #19b5ff;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dual-scores.single {
+  grid-template-columns: 1fr;
+}
+
+.solo-rounds {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #c4b5c9;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.solo-rounds span {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.solo-rounds b {
+  color: #fff8ff;
+  font-family: "Syne", sans-serif;
+  font-size: 22px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
