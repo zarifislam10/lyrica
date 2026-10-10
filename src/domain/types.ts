@@ -18,30 +18,30 @@ export type Syllable = {
   semitones: number
 }
 
-export type Language = "ko" | "es" | "en"
+export type Language = "en" | "ko" | "ar"
 
-// One sung unit: a Hangul block, a Spanish syllable, or an English note
-// (usually a word). Times are seconds from the start of the line, not the
-// clip, so they line up with the recording timeline the scorer uses.
+// One sung unit on one note: an English syllable, a Hangul block, or an
+// Arabic syllable. Times are seconds from the start of the line, so they line
+// up with the recording timeline the scorer uses.
 export type SongSyllable = {
   text: string
-  // Only for Korean; English and Spanish show `text` alone.
+  // Korean and Arabic only; English shows `text` alone.
   romanization?: string
   start: number
   end: number
-  // Target pitch relative to the line's median. Derived offline from the
-  // vocals stem, never hand-typed.
+  // Target note, typed by hand from the melody. Semitones from the song's
+  // tonic; the scorer recentres per line, so only the shape matters.
   semitones: number
 }
 
-// One round's worth of the clip. audioStart/audioEnd are seconds into the
-// song's clip and drive the "Hear it" button.
+// One round. audioStart/audioEnd locate this line in the song's spoken
+// "Hear it" clip; they stay unset until that clip is generated.
 export type SongLine = {
   id: number
   text: string
   romanization?: string
-  audioStart: number
-  audioEnd: number
+  audioStart?: number
+  audioEnd?: number
   syllables: SongSyllable[]
 }
 
@@ -49,11 +49,10 @@ export type Song = {
   id: string
   title: string
   language: Language
-  // Full mix, played to singers. Served from /public/songs/<id>.mp3.
+  // ElevenLabs TTS render of the lines, served from /public/songs/<id>.mp3.
   audioUrl: string
-  // Vocals-only stem, used for offline pitch extraction only.
-  vocalsUrl: string
-  clipSeconds: number
+  // Set until a native speaker confirms the syllable-to-note mapping.
+  needsNativeSpeakerCheck: boolean
   // Exactly three: one per round.
   lines: SongLine[]
 }

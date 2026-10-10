@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { CLIP_SECONDS, LINES_PER_SONG, songs } from "@/data/songs"
+import { LINES_PER_SONG, songs } from "@/data/songs"
+
+const strip = (text: string) => text.replace(/[\s-]/g, "")
 
 describe("songs catalog", () => {
   it("has one song per language", () => {
-    expect(songs.map((s) => s.language).sort()).toEqual(["en", "es", "ko"])
+    expect(songs.map((s) => s.language).sort()).toEqual(["ar", "en", "ko"])
   })
 
   it("has unique ids", () => {
@@ -13,44 +15,59 @@ describe("songs catalog", () => {
 
   for (const song of songs) {
     describe(song.id, () => {
-      it("points at /songs/<id>.mp3 and /songs/<id>-vocals.mp3", () => {
+      it("points at /songs/<id>.mp3", () => {
         expect(song.audioUrl).toBe(`/songs/${song.id}.mp3`)
-        expect(song.vocalsUrl).toBe(`/songs/${song.id}-vocals.mp3`)
       })
 
-      it("has one line per round, in order, inside the clip", () => {
-        expect(song.clipSeconds).toBeLessThanOrEqual(CLIP_SECONDS)
+      it("has one line per round", () => {
         expect(song.lines).toHaveLength(LINES_PER_SONG)
-        let previousEnd = 0
-        for (const line of song.lines) {
-          expect(line.audioStart).toBeGreaterThanOrEqual(previousEnd)
-          expect(line.audioEnd).toBeGreaterThan(line.audioStart)
-          expect(line.audioEnd).toBeLessThanOrEqual(song.clipSeconds)
-          previousEnd = line.audioEnd
-        }
+        expect(song.lines.map((l) => l.id)).toEqual([1, 2, 3])
       })
 
-      it("keeps syllables ordered and inside their line", () => {
+      it("keeps syllables ordered with room to breathe", () => {
         for (const line of song.lines) {
-          const length = line.audioEnd - line.audioStart
+          expect(line.syllables.length).toBeGreaterThan(0)
           let previousEnd = 0
           for (const syl of line.syllables) {
-            expect(syl.text).not.toBe("")
             expect(syl.start).toBeGreaterThanOrEqual(previousEnd)
             expect(syl.end).toBeGreaterThan(syl.start)
-            expect(syl.end).toBeLessThanOrEqual(length + 1e-6)
+            expect(Number.isFinite(syl.semitones)).toBe(true)
             previousEnd = syl.end
           }
         }
       })
 
-      it("only uses romanization for Korean", () => {
-        if (song.language === "ko") return
+      it("spells each line out of its syllables", () => {
         for (const line of song.lines) {
-          expect(line.romanization).toBeUndefined()
-          for (const syl of line.syllables) {
-            expect(syl.romanization).toBeUndefined()
+          const joined = line.syllables.map((s) => s.text).join("")
+          expect(joined).toBe(strip(line.text))
+        }
+      })
+
+      it("romanizes Korean and Arabic syllable by syllable, English not at all", () => {
+        for (const line of song.lines) {
+          if (song.language === "en") {
+            expect(line.romanization).toBeUndefined()
+            for (const syl of line.syllables) {
+              expect(syl.romanization).toBeUndefined()
+            }
+            continue
           }
+          const parts = line.syllables.map((s) => s.romanization)
+          expect(parts.every(Boolean)).toBe(true)
+          expect(strip(parts.join(""))).toBe(strip(line.romanization ?? ""))
+        }
+      })
+
+      it("keeps any Hear it range inside the clip order", () => {
+        let previousEnd = 0
+        for (const line of song.lines) {
+          if (line.audioStart === undefined || line.audioEnd === undefined) {
+            continue
+          }
+          expect(line.audioStart).toBeGreaterThanOrEqual(previousEnd)
+          expect(line.audioEnd).toBeGreaterThan(line.audioStart)
+          previousEnd = line.audioEnd
         }
       })
     })
