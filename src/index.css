@@ -1591,18 +1591,73 @@ button:focus-visible {
   }
 }
 
-.commentary-line {
-  margin: 8px 0 0;
-  color: #f4e5f5;
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-}
-
 .announcer {
+  --player: #ff4fa3;
+  position: relative;
   display: grid;
   justify-items: center;
+  gap: 10px;
+  padding: 22px 18px 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--player) 30%, transparent) 1.2px, transparent 1.6px) 0 0 / 10px 10px,
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--player) 18%, transparent), transparent);
+  border-block: 1px solid color-mix(in srgb, var(--player) 45%, transparent);
+  animation: cardRise 0.45s ease-out 0.25s both;
+}
+
+.announcer-label {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+  color: var(--player);
+  font-family: "Syne", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.announcer-bars {
+  display: inline-flex;
+  height: 14px;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.announcer-bars b {
+  width: 3px;
+  height: 100%;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: wave 0.6s ease-in-out infinite alternate;
+}
+
+.announcer-bars b:nth-child(2) {
+  animation-delay: -0.2s;
+}
+
+.announcer-bars b:nth-child(3) {
+  animation-delay: -0.4s;
+}
+
+.announcer-bars b:nth-child(4) {
+  animation-delay: -0.1s;
+}
+
+.commentary-line {
+  max-width: 34ch;
+  margin: 0;
+  color: #fff;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(20px, 3.4vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow:
+    0 0 22px color-mix(in srgb, var(--player) 65%, transparent),
+    2px 2px 0 color-mix(in srgb, var(--player) 50%, transparent);
 }
 
 .announcer-status {

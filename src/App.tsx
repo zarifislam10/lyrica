@@ -995,7 +995,24 @@ function RoundResultScreen({
           })}
         </div>
 
-        <div className="announcer" aria-live="polite">
+        <div
+          className="announcer"
+          aria-live="polite"
+          style={
+            {
+              "--player": PLAYER_COLORS[winner ?? 0],
+            } as CSSProperties
+          }
+        >
+          <span className="announcer-label">
+            <i className="announcer-bars" aria-hidden="true">
+              <b />
+              <b />
+              <b />
+              <b />
+            </i>
+            Announcer
+          </span>
           <p className="commentary-line">
             {announcer.commentary ?? fallbackCommentary(state)}
           </p>
