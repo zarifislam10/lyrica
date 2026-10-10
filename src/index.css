@@ -1357,6 +1357,220 @@ button:focus-visible {
   }
 }
 
+.setup-screen,
+.handover-screen,
+.final-screen {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 720px;
+}
+
+.setup-content,
+.handover-content,
+.final-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+  padding-top: 24px;
+}
+
+.setup-content h1,
+.handover-content h1,
+.final-content h1 {
+  margin: 0;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(28px, 6vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.setup-copy,
+.handover-copy {
+  margin: 0;
+  color: #c4b5c9;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.name-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.name-field {
+  display: grid;
+  gap: 6px;
+}
+
+.name-field > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.player-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.name-field input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #3a2e40;
+  border-radius: 0;
+  color: #fff8ff;
+  background: #17101c;
+  font-size: 16px;
+}
+
+.name-field input:focus {
+  outline: 2px solid #19b5ff;
+  outline-offset: 2px;
+}
+
+.mic-test {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #3a2e40;
+  background: #17101c;
+}
+
+.mic-test-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mic-pitch {
+  font-family: "Syne", sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.mic-pitch small {
+  margin-left: 6px;
+  color: #c4b5c9;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.test-mic-button,
+.start-battle-button,
+.handover-content button,
+.final-actions button {
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+  color: #fff;
+  background: #19b5ff;
+  font-family: "Syne", sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.start-battle-button,
+.handover-content button,
+.final-actions .primary-button {
+  background: #ff4fa3;
+}
+
+.start-battle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Syne", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.turn-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.dual-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.player-score-card {
+  padding: 16px 12px 12px;
+  border: 1px solid #3a2e40;
+  background: #17101c;
+  text-align: center;
+}
+
+.player-score-card.winner {
+  border-color: #ff4fa3;
+}
+
+.player-score-card strong {
+  display: block;
+  margin-top: 8px;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(36px, 8vw, 56px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.player-score-card p {
+  margin: 8px 0 0;
+  color: #c4b5c9;
+  font-size: 12px;
+}
+
+.commentary-line {
+  margin: 8px 0 0;
+  color: #f4e5f5;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.scoreboard-row {
+  display: flex;
+  justify-content: space-between;
+  color: #c4b5c9;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.final-actions {
+  display: grid;
+  gap: 12px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
