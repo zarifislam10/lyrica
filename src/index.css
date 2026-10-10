@@ -297,6 +297,114 @@ button:focus-visible {
   bottom: 18%;
 }
 
+.home-star {
+  animation: starDrift 16s ease-in-out infinite;
+}
+
+.star-cyan {
+  animation-duration: 19s;
+  animation-delay: -4s;
+  animation-direction: reverse;
+}
+
+.star-violet {
+  animation-duration: 21s;
+  animation-delay: -9s;
+}
+
+.star-orange {
+  animation-duration: 18s;
+  animation-delay: -13s;
+  animation-direction: reverse;
+}
+
+.home-dot-art .dot-star {
+  animation: starSpin 7s linear infinite;
+}
+
+.tiny-star-two {
+  animation-duration: 9s !important;
+  animation-direction: reverse !important;
+}
+
+.home-content > * {
+  animation: homeRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.home-content > :nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.home-content > :nth-child(3) {
+  animation-delay: 0.25s;
+}
+
+.home-content > :nth-child(4) {
+  animation-delay: 0.35s;
+}
+
+.home-content > :nth-child(5) {
+  animation-delay: 0.5s;
+}
+
+.home-content button::before {
+  display: inline-block;
+  animation: starSpin 3s linear infinite;
+}
+
+.home-content h1 > i::after {
+  animation: sparkleSpin 3s ease-in-out infinite;
+}
+
+@keyframes starDrift {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(14px, -18px) rotate(8deg) scale(1.05);
+  }
+  66% {
+    transform: translate(-10px, 12px) rotate(-6deg) scale(0.97);
+  }
+}
+
+@keyframes starSpin {
+  0% {
+    transform: rotate(0deg) scale(0.85);
+    opacity: 0.6;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg) scale(0.85);
+    opacity: 0.6;
+  }
+}
+
+@keyframes homeRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sparkleSpin {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) rotate(180deg) scale(1.4);
+  }
+}
+
 .halftone-sparkle ellipse,
 .dot-star ellipse {
   transform-box: fill-box;
