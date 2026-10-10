@@ -4,7 +4,10 @@ import { buildRoundResultPayload } from "@/domain/announcer"
 import { createMatchState, matchReducer } from "@/domain/match"
 
 function finishedRound(names: [string, string] = ["Ava", "Sam"]) {
-  let state = matchReducer(createMatchState(names), { type: "GO_SETUP" })
+  let state = matchReducer(createMatchState(names), {
+    type: "CHOOSE_MODE",
+    mode: "battle",
+  })
   state = matchReducer(state, { type: "START_MATCH" })
   state = matchReducer(state, {
     type: "TURN_SCORED",

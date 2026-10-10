@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import {
   MAX_NAME_LENGTH,
   PLAYER_COLORS,
+  type GameMode,
   type PlayerIndex,
 } from "@/domain/match"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
@@ -33,12 +34,38 @@ function Brand() {
   )
 }
 
+type SetupCopy = {
+  tag: string
+  heading: string
+  body: string
+  start: string
+}
+
+const SETUP_COPY: Record<GameMode, SetupCopy> = {
+  solo: {
+    tag: "Solo · one singer",
+    heading: "Who's singing?",
+    body: "Three lines. You'll get a Tune score after each one.",
+    start: "Start singing",
+  },
+  battle: {
+    tag: "Two players · one device",
+    heading: "Name the singers",
+    body: "Take turns on this device. Best of three lines.",
+    start: "Start battle",
+  },
+}
+
 export default function SetupScreen({
+  mode,
+  onChangeMode,
   names,
   onNameChange,
   onMicReady,
   onStart,
 }: {
+  mode: GameMode
+  onChangeMode: () => void
   names: [string, string]
   onNameChange: (player: PlayerIndex, name: string) => void
   onMicReady: (session: AudioSession) => void
@@ -118,28 +145,38 @@ export default function SetupScreen({
     generic: "The microphone couldn't start. Try again.",
   }
 
+  const copy = SETUP_COPY[mode]
+  const players: PlayerIndex[] = mode === "solo" ? [0] : [0, 1]
+
   return (
     <main className="screen setup-screen">
       <header className="screen-header">
         <Brand />
-        <p>Two players · one device</p>
+        <p>{copy.tag}</p>
       </header>
 
       <section className="setup-content">
-        <h1>Name the singers</h1>
+        <h1>{copy.heading}</h1>
         <p className="setup-copy">
-          Take turns on this device. Best of three lines.
+          {copy.body}{" "}
+          <button
+            className="change-mode-button"
+            type="button"
+            onClick={onChangeMode}
+          >
+            Change mode
+          </button>
         </p>
 
         <div className="name-fields">
-          {([0, 1] as const).map((player) => (
+          {players.map((player) => (
             <label className="name-field" key={player}>
               <span>
                 <i
                   className="player-swatch"
                   style={{ background: PLAYER_COLORS[player] }}
                 />
-                Player {player + 1}
+                {mode === "solo" ? "Your name" : `Player ${player + 1}`}
               </span>
               <input
                 value={names[player]}
@@ -174,7 +211,7 @@ export default function SetupScreen({
           onClick={startBattle}
           disabled={micStatus !== "ready"}
         >
-          Start battle
+          {copy.start}
         </button>
       </section>
     </main>
