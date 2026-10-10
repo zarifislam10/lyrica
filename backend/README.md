@@ -42,7 +42,7 @@ CORS controls which browser origins can read responses; it is not authentication
 
 Add `GEMINI_API_KEY` to your existing local `.env`. Use `.env.example` for the new
 optional settings; do not overwrite an existing `.env`. Restart the backend.
-`GEMINI_MODEL` defaults to `gemini-3.5-flash`. Round speech uses
+`GEMINI_MODEL` defaults to `gemini-2.5-flash`. Round speech uses
 `ELEVENLABS_ROUND_MODEL_ID=eleven_flash_v2_5` for low latency; the welcome keeps its
 existing model. Both use the same `ELEVENLABS_VOICE_ID`.
 
