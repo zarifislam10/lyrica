@@ -1,0 +1,10 @@
+{
+  "description": "A mobile-first karaoke coach helps non-Korean speakers sing lines accurately by visualizing pitch, scoring performance, and offering real-time tips.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
