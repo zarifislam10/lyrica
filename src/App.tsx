@@ -21,6 +21,7 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
+import WordsComingSoon from "@/screens/WordsComingSoon"
 import {
   createAudioContext,
   sessionFromMic,
@@ -970,7 +971,13 @@ function RoundResultScreen({
                   />
                   {displayName(state, player)}
                 </span>
-                <strong>{state.turnScores[player] ?? 0}</strong>
+                <div className="score-slots">
+                  <div className="score-slot">
+                    <small>Tune</small>
+                    <strong>{state.turnScores[player] ?? 0}</strong>
+                  </div>
+                  <WordsComingSoon />
+                </div>
                 <p>{coach.body}</p>
               </div>
             )

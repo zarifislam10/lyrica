@@ -4,14 +4,21 @@ import {
   displayName,
   soloTotal,
 } from "@/domain/match"
+import WordsComingSoon from "@/screens/WordsComingSoon"
 
 function SoloFinal({ state }: { state: MatchState }) {
   return (
     <>
       <p className="player-chip" style={{ color: PLAYER_COLORS[0] }}>
-        {displayName(state, 0)} · Tune
+        {displayName(state, 0)}
       </p>
-      <h1>{soloTotal(state)}</h1>
+      <div className="score-slots final-score-slots">
+        <div className="score-slot">
+          <small>Tune</small>
+          <strong>{soloTotal(state)}</strong>
+        </div>
+        <WordsComingSoon />
+      </div>
       <div className="solo-rounds">
         {state.soloScores.map((score, index) => (
           <span key={index}>
