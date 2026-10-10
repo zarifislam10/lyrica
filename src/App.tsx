@@ -456,7 +456,8 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
           <i aria-hidden="true" />
           <span aria-hidden="true">ca</span>
         </h1>
-        <p>Sing it like you mean it. In any language.</p>
+        <p>Learn a language by singing it.</p>
+        <p className="home-subline">Sing it. Say it right. Win the round.</p>
         <button onClick={onStart}>Start singing</button>
       </section>
     </main>

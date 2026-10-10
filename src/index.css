@@ -197,6 +197,13 @@ button:focus-visible {
   line-height: 1.45;
 }
 
+.home-content > p.home-subline:not(.home-eyebrow) {
+  margin-top: 8px;
+  color: #c9b3cc;
+  font-size: clamp(14px, 1.6vw, 18px);
+  font-weight: 500;
+}
+
 .home-content button {
   position: relative;
   display: inline-flex;
