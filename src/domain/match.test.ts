@@ -5,6 +5,8 @@ import {
   displayName,
   matchReducer,
   normalizeName,
+  soloTotal,
+  type GameMode,
   type MatchState,
 } from "@/domain/match"
 
@@ -18,10 +20,11 @@ function turn(score: number, timing = 0.8, missed: number[] = []) {
   }
 }
 
-function started() {
-  const setup = matchReducer(createMatchState(["Ava", "Sam"]), {
-    type: "GO_SETUP",
+function started(mode: GameMode = "battle") {
+  const picking = matchReducer(createMatchState(["Ava", "Sam"]), {
+    type: "GO_MODE",
   })
+  const setup = matchReducer(picking, { type: "CHOOSE_MODE", mode })
   return matchReducer(setup, { type: "START_MATCH" })
 }
 
@@ -123,5 +126,56 @@ describe("matchReducer", () => {
     const state = { ...started(), names: ["Ava", "Ava"] as [string, string] }
     expect(displayName(state, 0)).toBe("Ava 1")
     expect(displayName(state, 1)).toBe("Ava 2")
+  })
+
+  it("goes home → mode → setup with the chosen mode", () => {
+    const picking = matchReducer(createMatchState(), { type: "GO_MODE" })
+    expect(picking.phase).toBe("mode")
+    const setup = matchReducer(picking, { type: "CHOOSE_MODE", mode: "solo" })
+    expect(setup.phase).toBe("setup")
+    expect(setup.mode).toBe("solo")
+    expect(matchReducer(setup, { type: "START_MATCH" }).mode).toBe("solo")
+  })
+})
+
+describe("solo mode", () => {
+  it("shows the result right after each take, with no handover", () => {
+    const afterTake = matchReducer(started("solo"), turn(72, 0.8, [1]))
+    expect(afterTake.phase).toBe("roundResult")
+    expect(afterTake.turnScores[0]).toBe(72)
+    expect(afterTake.turnMissed[0]).toEqual([1])
+    expect(afterTake.roundWinner).toBeNull()
+    expect(afterTake.roundWins).toEqual([0, 0])
+    expect(afterTake.soloScores).toEqual([72])
+  })
+
+  it("always plays all three lines, then averages the scores", () => {
+    let state = started("solo")
+    for (const score of [90, 60, 81]) {
+      expect(state.currentPlayer).toBe(0)
+      state = matchReducer(state, turn(score))
+      state = matchReducer(state, { type: "ROUND_CONTINUE" })
+    }
+    expect(state.phase).toBe("final")
+    expect(state.round).toBe(3)
+    expect(state.soloScores).toEqual([90, 60, 81])
+    expect(soloTotal(state)).toBe(77)
+  })
+
+  it("sing again stays solo and clears the scores", () => {
+    let state = matchReducer(started("solo"), turn(70))
+    state = matchReducer(state, { type: "REMATCH" })
+    expect(state.mode).toBe("solo")
+    expect(state.phase).toBe("turnReady")
+    expect(state.currentPlayer).toBe(0)
+    expect(state.soloScores).toEqual([])
+  })
+
+  it("does not number the solo singer when stored names match", () => {
+    const state = {
+      ...started("solo"),
+      names: ["Ava", "Ava"] as [string, string],
+    }
+    expect(displayName(state, 0)).toBe("Ava")
   })
 })

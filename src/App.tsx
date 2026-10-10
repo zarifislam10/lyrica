@@ -10,9 +10,12 @@ import {
   lineForRound,
   loadStoredNames,
   matchReducer,
+  type GameMode,
   type MatchState,
+  type PlayerIndex,
 } from "@/domain/match"
 import { buildRoundResultPayload } from "@/domain/announcer"
+import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
@@ -39,12 +42,6 @@ const DURATION = 4
 const COUNT_IN_BEATS = 3
 const COUNT_IN_INTERVAL = 0.7
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
-// Treat a recording as "unclear" if fewer than this fraction of recorded frames
-// passed the clarity threshold.
-const MIN_CLARITY_FRAME_RATIO = 0.15
-// Approximate frames-per-second produced by the rAF pitch loop; used to size
-// the "expected frames" denominator for the unclear check.
-const APPROX_FRAMES_PER_SECOND = 60
 // Shared lane scale: 50% is the line's reference pitch, every semitone away
 // from it moves this many percent of lane height.
 const LANE_PERCENT_PER_SEMITONE = 6
@@ -422,6 +419,58 @@ function ScreenHeader({
   )
 }
 
+type ModeOption = {
+  mode: GameMode
+  title: string
+  body: string
+}
+
+const MODE_OPTIONS: ModeOption[] = [
+  {
+    mode: "solo",
+    title: "Solo",
+    body: "Sing three lines on your own. Get a Tune score and the syllables to fix after each one.",
+  },
+  {
+    mode: "battle",
+    title: "Battle",
+    body: "Two players, one device. Take turns singing each line. Best of three wins.",
+  },
+]
+
+function ModeScreen({
+  onChoose,
+  onHome,
+}: {
+  onChoose: (mode: GameMode) => void
+  onHome: () => void
+}) {
+  return (
+    <main className="screen setup-screen">
+      <CornerDots />
+      <header className="screen-header">
+        <Brand onHome={onHome} />
+      </header>
+      <section className="setup-content">
+        <h1>How do you want to play?</h1>
+        <div className="mode-options">
+          {MODE_OPTIONS.map((option) => (
+            <button
+              className="mode-card"
+              type="button"
+              key={option.mode}
+              onClick={() => onChoose(option.mode)}
+            >
+              <strong>{option.title}</strong>
+              <span>{option.body}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  )
+}
+
 function HomeScreen({ onStart }: { onStart: () => void }) {
   return (
     <main className="screen home-screen">
@@ -586,13 +635,12 @@ function SingScreen({
         setProgress(nextProgress)
         if (now >= recordEnd) {
           const finalSamples = samplesRef.current
-          const expectedFrames = Math.max(
-            1,
-            Math.floor(DURATION * APPROX_FRAMES_PER_SECOND),
+          const unclear = isUnclearTake(
+            finalSamples.length,
+            detector.framesAnalyzed(),
           )
-          const clarityRatio = finalSamples.length / expectedFrames
           cleanup()
-          if (clarityRatio < MIN_CLARITY_FRAME_RATIO) {
+          if (unclear) {
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
@@ -829,30 +877,34 @@ type AnnouncerStatus = "loading" | "live" | "fallback"
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
 function useAnnouncement(state: MatchState) {
-  const [status, setStatus] = useState<AnnouncerStatus>("loading")
+  // POST /round-result only accepts two players, so solo keeps the built-in line.
+  const enabled = state.mode === "battle"
+  const [status, setStatus] = useState<AnnouncerStatus>(
+    enabled ? "loading" : "fallback",
+  )
   const [commentary, setCommentary] = useState<string | null>(null)
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const payloadRef = useRef(buildRoundResultPayload(state))
+  const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
 
   useEffect(() => {
+    const payload = payloadRef.current
+    if (!payload) return
     const controller = new AbortController()
     // Deferred so StrictMode's throwaway mount never sends a paid request.
     const start = setTimeout(() => {
-      void fetchAnnouncement(payloadRef.current, controller.signal).then(
-        (result) => {
-          if (controller.signal.aborted) return
-          if (!result) {
-            setStatus("fallback")
-            return
-          }
-          setCommentary(result.commentary)
-          setStatus("live")
-          const audio = new Audio(result.audioUrl)
-          audioRef.current = audio
-          audio.play().catch(() => setNeedsTap(true))
-        },
-      )
+      void fetchAnnouncement(payload, controller.signal).then((result) => {
+        if (controller.signal.aborted) return
+        if (!result) {
+          setStatus("fallback")
+          return
+        }
+        setCommentary(result.commentary)
+        setStatus("live")
+        const audio = new Audio(result.audioUrl)
+        audioRef.current = audio
+        audio.play().catch(() => setNeedsTap(true))
+      })
     }, 0)
     return () => {
       clearTimeout(start)
@@ -889,6 +941,9 @@ function RoundResultScreen({
   const matchOver = isMatchOver(state)
   const announcer = useAnnouncement(state)
   const [forceFallback, setForceFallback] = useState(isFallbackForced)
+  const solo = state.mode === "solo"
+  const players: PlayerIndex[] = solo ? [0] : [0, 1]
+  const finishLabel = solo ? "See your total" : "See the winner"
 
   return (
     <main className="screen result-screen">
@@ -896,8 +951,8 @@ function RoundResultScreen({
       <ScreenHeader round={state.round} onHome={onHome} />
 
       <section className="result-content">
-        <div className="dual-scores">
-          {([0, 1] as const).map((player) => {
+        <div className={`dual-scores ${solo ? "single" : ""}`}>
+          {players.map((player) => {
             const coach = buildCoachCopy(line, state.turnMissed[player])
             return (
               <div
@@ -941,11 +996,16 @@ function RoundResultScreen({
           )}
         </div>
 
-        {([0, 1] as const).map((player) => (
+        {players.map((player) => (
           <div key={player}>
-            <p className="player-chip" style={{ color: PLAYER_COLORS[player] }}>
-              {displayName(state, player)}
-            </p>
+            {!solo && (
+              <p
+                className="player-chip"
+                style={{ color: PLAYER_COLORS[player] }}
+              >
+                {displayName(state, player)}
+              </p>
+            )}
             <LyricSyllables
               line={line}
               result
@@ -962,23 +1022,24 @@ function RoundResultScreen({
           </div>
         ))}
 
-        <div className="scoreboard-row">
-          <span style={{ color: PLAYER_COLORS[0] }}>
-            {displayName(state, 0)}
-          </span>
-          <span>
-            {state.roundWins[0]} – {state.roundWins[1]}
-          </span>
-          <span style={{ color: PLAYER_COLORS[1] }}>
-            {displayName(state, 1)}
-          </span>
-        </div>
+        {!solo && (
+          <div className="scoreboard-row">
+            <span style={{ color: PLAYER_COLORS[0] }}>
+              {displayName(state, 0)}
+            </span>
+            <span>
+              {state.roundWins[0]} – {state.roundWins[1]}
+            </span>
+            <span style={{ color: PLAYER_COLORS[1] }}>
+              {displayName(state, 1)}
+            </span>
+          </div>
+        )}
       </section>
 
       <div className="result-actions">
         <button className="primary-button" onClick={onContinue}>
-          {matchOver ? "See the winner" : `Round ${state.round + 1}`}{" "}
-          <span>→</span>
+          {matchOver ? finishLabel : `Round ${state.round + 1}`} <span>→</span>
         </button>
       </div>
 
@@ -1033,7 +1094,9 @@ export default function App() {
   }
 
   const goHome = () => {
-    if (inMatch && !window.confirm("Leave this battle?")) return
+    const leavePrompt =
+      state.mode === "solo" ? "Leave this session?" : "Leave this battle?"
+    if (inMatch && !window.confirm(leavePrompt)) return
     closeSession()
     dispatch({ type: "GO_HOME" })
   }
@@ -1070,10 +1133,18 @@ export default function App() {
     <div className="app-shell">
       <div className="site-frame">
         {state.phase === "home" && (
-          <HomeScreen onStart={() => dispatch({ type: "GO_SETUP" })} />
+          <HomeScreen onStart={() => dispatch({ type: "GO_MODE" })} />
+        )}
+        {state.phase === "mode" && (
+          <ModeScreen
+            onChoose={(mode) => dispatch({ type: "CHOOSE_MODE", mode })}
+            onHome={goHome}
+          />
         )}
         {state.phase === "setup" && (
           <SetupScreen
+            mode={state.mode}
+            onChangeMode={() => dispatch({ type: "GO_MODE" })}
             names={state.names}
             onNameChange={(index, name) =>
               dispatch({ type: "SET_NAME", player: index, name })

@@ -15,6 +15,8 @@ type CreateOptions = {
 export type PitchStream = {
   start: (startTime: number) => void
   stop: () => void
+  /** Frames analyzed since start, clear or not. */
+  framesAnalyzed: () => number
 }
 
 /**
@@ -38,9 +40,11 @@ export function createPitchDetector({
   let rafId = 0
   let running = false
   let startAt = 0
+  let frames = 0
 
   const tick = () => {
     if (!running) return
+    frames += 1
     analyser.getFloatTimeDomainData(buffer)
     const [hz, clarity] = detector.findPitch(buffer, ctx.sampleRate)
     if (clarity >= CLARITY_THRESHOLD && hz > 0) {
@@ -56,8 +60,10 @@ export function createPitchDetector({
       if (running) return
       running = true
       startAt = startTime
+      frames = 0
       rafId = requestAnimationFrame(tick)
     },
+    framesAnalyzed: () => frames,
     stop() {
       if (!running) return
       running = false
