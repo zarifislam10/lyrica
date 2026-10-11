@@ -447,20 +447,22 @@ button:focus-visible {
   }
 }
 
-.halftone-sparkle ellipse,
-.dot-star ellipse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: dotTwinkle 4s ease-in-out infinite;
+/* Each sparkle is hundreds of SVG dots. Animate the whole SVG, never the
+   dots: motion inside an SVG repaints every dot every frame, while a whole
+   element on its own layer is drawn once and moved by the GPU. */
+.home-star,
+.dot-star,
+.logo-mic {
+  will-change: transform;
 }
 
-.halftone-sparkle ellipse:nth-child(3n),
-.dot-star ellipse:nth-child(3n) {
-  animation-delay: -1.5s;
+.corner-dots .halftone-sparkle {
+  will-change: opacity;
+  animation: sparkleBreathe 4s ease-in-out infinite alternate;
 }
 
-.halftone-sparkle ellipse:nth-child(4n) {
-  animation-delay: -2.7s;
+.corner-dots .corner-star-two {
+  animation-delay: -2s;
 }
 
 .corner-star-one {
@@ -1352,9 +1354,9 @@ button:focus-visible {
   50% { opacity: 0.35; transform: scale(0.7); }
 }
 
-@keyframes dotTwinkle {
-  0%, 100% { transform: rotate(30deg) scale(0.82); }
-  50% { transform: rotate(30deg) scale(1); }
+@keyframes sparkleBreathe {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
 }
 
 @keyframes ringWave {
