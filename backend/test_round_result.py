@@ -69,7 +69,11 @@ class RoundResultTests(unittest.TestCase):
             self.assertEqual(request.headers["xi-api-key"], "test-eleven")
             self.assertEqual(request.url.path,
                              f"/v1/text-to-speech/{round_result.ANNOUNCER_VOICE_ID}")
-            self.assertEqual(body["text"], "Laiba wins round 1! Great effort from both singers!")
+            self.assertEqual(
+                body["text"],
+                round_result.ANNOUNCER_SPEECH_TAGS
+                + "Laiba wins round 1! Great effort from both singers!",
+            )
             self.assertEqual(body["model_id"], "test-tts")
             self.assertEqual(body["voice_settings"], round_result.ANNOUNCER_VOICE_SETTINGS)
             return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
