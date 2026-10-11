@@ -11,6 +11,7 @@ to disk and nothing about the audio is logged.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,6 +89,17 @@ def _load_calibration() -> dict:
     return raw
 
 
+def words_enabled() -> bool:
+    """The wav2vec2 download OOMs Render's 512MB free box. Off there unless
+    WORDS_ENABLED is explicitly on. Local stays on unless someone sets it off."""
+    raw = os.getenv("WORDS_ENABLED", "").strip().lower()
+    if raw in {"1", "true", "yes"}:
+        return True
+    if raw in {"0", "false", "no"}:
+        return False
+    return os.getenv("RENDER", "").strip().lower() not in {"1", "true"}
+
+
 def init_words_service() -> None:
     """Called at app startup and retried from _require_service() so a
     calibration file that appears later (e.g. after `python ml/calibrate.py`)
@@ -97,6 +109,9 @@ def init_words_service() -> None:
         if _service is not None:
             return
         _init_error = None
+        if not words_enabled():
+            _init_error = "Words probe is off on this host (WORDS_ENABLED)."
+            return
         if not CALIBRATION_PATH.exists():
             _init_error = ("Words probe not calibrated. "
                            "Run `python ml/calibrate.py` first.")
