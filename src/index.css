@@ -171,7 +171,7 @@ button:focus-visible {
 }
 
 .home-eyebrow {
-  margin: 0 0 38px !important;
+  margin: 0 0 clamp(52px, 9vw, 96px) !important;
   color: #19b5ff !important;
   font-size: 10px !important;
   font-weight: 800;
@@ -331,30 +331,16 @@ button:focus-visible {
   animation-direction: reverse, alternate;
 }
 
-.home-content h1 {
-  position: relative;
-  display: inline-block;
-}
-
-.home-mic {
+.logo-mic {
   position: absolute;
-  top: -0.5em;
-  right: -0.52em;
-  width: 0.78em;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  box-shadow:
-    0 0 0.12em rgb(255 79 163 / 0.55),
-    0 0 0.3em rgb(25 181 255 / 0.3);
-  animation:
-    micSway 2.8s ease-in-out infinite alternate,
-    homeRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s backwards;
-}
-
-.home-mic img {
-  display: block;
-  width: 100%;
-  clip-path: circle(45%);
+  bottom: calc(100% + 0.03em);
+  left: 50%;
+  width: 0.28em;
+  margin-left: -0.14em;
+  overflow: visible;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 0.05em rgb(255 79 163 / 0.6));
+  animation: micSway 2.6s ease-in-out infinite alternate;
 }
 
 .home-content > * {
@@ -397,8 +383,11 @@ button:focus-visible {
 }
 
 .home-content h1 > i::after {
+  bottom: calc(100% + 2.6em);
+  left: calc(50% - 2.2em);
+  color: #19b5ff;
+  font-size: 0.12em;
   transform: none;
-  translate: -50% 0;
   animation:
     starTurn 6s linear infinite,
     starPulse 1.6s ease-in-out infinite alternate;
@@ -434,12 +423,10 @@ button:focus-visible {
 
 @keyframes micSway {
   from {
-    rotate: -16deg;
-    translate: 0 0;
+    rotate: 14deg;
   }
   to {
-    rotate: 6deg;
-    translate: 0 -0.06em;
+    rotate: 34deg;
   }
 }
 
