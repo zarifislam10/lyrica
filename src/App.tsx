@@ -1454,7 +1454,9 @@ export default function App() {
           <SingScreen
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
-            nextLine={state.song.lines[state.round]}
+            nextLine={
+              isMatchOver(state) ? undefined : state.song.lines[state.round]
+            }
             audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
