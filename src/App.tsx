@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from "react"
 
-import { songs } from "@/data/songs"
+import { SECONDS_PER_BEAT, songs } from "@/data/songs"
 import {
   PLAYER_COLORS,
   ROUNDS_PER_MATCH,
@@ -24,7 +24,12 @@ import {
   type PlayerIndex,
 } from "@/domain/match"
 import { PLAYER_IDS, buildRoundResultPayload } from "@/domain/announcer"
-import { syllableDisplayTexts } from "@/domain/lyrics"
+import {
+  bouncingBall,
+  syllableDisplayTexts,
+  syllableFill,
+  type BallPosition,
+} from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { Language, PitchSample, PracticeLine } from "@/domain/types"
@@ -53,7 +58,8 @@ type ErrorKind = "blocked" | "no-device" | "unclear" | "interrupted" | "generic"
 
 const DURATION = TURN_SECONDS
 const COUNT_IN_BEATS = 3
-const COUNT_IN_INTERVAL = 0.7
+// Same tempo as the melody, so the count-in sets the beat the line is sung on.
+const COUNT_IN_INTERVAL = SECONDS_PER_BEAT
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
 // Shared lane scale: 50% is the line's reference pitch, every semitone away
 // from it moves this many percent of lane height.
@@ -253,32 +259,52 @@ function LyricSyllables({
   activeIndex = -1,
   result = false,
   missed = [],
+  fill,
+  litColor,
+  ball,
 }: {
   line: PracticeLine
   language: Language
   activeIndex?: number
   result?: boolean
   missed?: number[]
+  fill?: number[]
+  litColor?: string
+  ball?: BallPosition
 }) {
   const texts = syllableDisplayTexts(line)
   return (
     <div
-      className="lyric-grid"
+      className={[
+        "lyric-grid",
+        fill ? "singing" : "",
+        ball ? "with-ball" : "",
+      ].join(" ")}
       lang={language}
       // Arabic reads right to left here; the pitch lane stays left to right
       // as a timeline. Agreed with the team, not an oversight.
       dir={language === "ar" ? "rtl" : "ltr"}
-      style={{ "--syllable-count": line.syllables.length } as CSSProperties}
+      style={
+        {
+          "--syllable-count": line.syllables.length,
+          "--lit": litColor,
+        } as CSSProperties
+      }
     >
       {line.syllables.map((syllable, index) => {
         const isMissed = missed.includes(index)
+        const sung = fill?.[index] ?? 0
         return (
           <div
             className={[
               "syllable",
               activeIndex === index ? "active" : "",
+              fill && sung >= 1 ? "sung" : "",
               result ? (isMissed ? "missed" : "matched") : "",
             ].join(" ")}
+            style={
+              fill ? { "--fill": `${sung * 100}%` } as CSSProperties : undefined
+            }
             key={`${line.id}-${index}`}
           >
             <span className="hangul">{texts[index]}</span>
@@ -288,6 +314,13 @@ function LyricSyllables({
           </div>
         )
       })}
+      {ball && (
+        <span
+          className="lyric-ball"
+          aria-hidden="true"
+          style={{ "--slot": ball.slot, "--lift": ball.lift } as CSSProperties}
+        />
+      )}
     </div>
   )
 }
@@ -606,6 +639,7 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 
 function SingScreen({
   line,
+  nextLine,
   audioUrl,
   language,
   round,
@@ -617,6 +651,7 @@ function SingScreen({
   onBlob,
 }: {
   line: PracticeLine
+  nextLine?: PracticeLine
   audioUrl: string
   language: Language
   round: 1 | 2 | 3
@@ -835,6 +870,15 @@ function SingScreen({
     )
   }, [line, progress, singState])
 
+  const fill =
+    singState === "recording"
+      ? syllableFill(line.syllables, progress * DURATION)
+      : undefined
+  const ball = bouncingBall(
+    line.syllables,
+    singState === "recording" ? progress * DURATION : 0,
+  )
+
   const errorTitle: Record<Exclude<ErrorKind, null>, string> = {
     blocked: "Mic access needed",
     "no-device": "No microphone found",
@@ -929,7 +973,26 @@ function SingScreen({
           line={line}
           language={language}
           activeIndex={activeIndex}
+          fill={fill}
+          litColor={playerColor}
+          ball={ball}
         />
+
+        {nextLine && (
+          <p className="next-line">
+            <span className="next-line-label">Next line</span>
+            <span
+              className="next-line-text"
+              lang={language}
+              dir={language === "ar" ? "rtl" : "ltr"}
+            >
+              {nextLine.text}
+            </span>
+            {nextLine.romanization && (
+              <span className="next-line-roman">{nextLine.romanization}</span>
+            )}
+          </p>
+        )}
 
         <PitchLane
           line={line}
@@ -1029,9 +1092,16 @@ function SingScreen({
       )}
 
       {singState === "counting" && (
-        <div className="count-overlay" aria-live="assertive">
-          <span key={count}>{count}</span>
-          <small>Get ready</small>
+        <div
+          className="count-overlay"
+          aria-live="assertive"
+          style={{ "--beat": `${COUNT_IN_INTERVAL}s` } as CSSProperties}
+        >
+          <div className="count-beat" key={count}>
+            <i className="count-ring" aria-hidden="true" />
+            <span>{count}</span>
+          </div>
+          <small>Start singing on the beat after 1</small>
         </div>
       )}
     </main>
@@ -1444,6 +1514,9 @@ export default function App() {
           <SingScreen
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
+            nextLine={
+              isMatchOver(state) ? undefined : state.song.lines[state.round]
+            }
             audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
