@@ -1,17 +1,17 @@
-// "Hear it in my voice" — stretch feature.
+// "Hear how you'd sound" — stretch feature on the result screen.
 //
-// Shown per player on the round-result screen. Three states:
-//   1. No session yet → consent screen with a checkbox and a Record button.
-//      Explicit opt-in (checkbox) per AGENTS.md.
-//   2. Recording → short visible countdown, hard stop at RECORD_SECONDS.
-//   3. Session exists → a "Hear it in my voice" button that plays the
-//      current line in the cloned voice. Each click after the first for
-//      the same (song, line) hits the server cache, not credits.
+// Flow:
+//   idle    → prominent CTA. Click opens the consent step.
+//   consent → short plain-text summary + single confirm button. The click
+//             is the explicit opt-in (confirm-dialog pattern per AGENTS.md).
+//   recording → 15 s hard cap with a visible countdown.
+//   uploading → sample is streamed to the server; voice id stays server-side.
+//   ready   → clicking plays the current line in the cloned voice. We
+//             pre-fetch the audio right after the clone is created so the
+//             first press is instant.
 //
-// Honesty: labelled as "AI voice copy, spoken — not sung" so a listener
-// knows what they're hearing. On any error we show a short message and
-// disable the button; the standard "Hear it" on the sing screen remains
-// as a fallback for anything the user needs to hear.
+// Still labelled honestly ("AI copy, spoken") so a listener knows what
+// they're hearing. On error we show a short message and let them retry.
 
 import { useEffect, useRef, useState } from "react"
 
@@ -50,10 +50,13 @@ export default function VoiceClonePanel({
   onSessionCreated: (sessionId: string) => void
 }) {
   const [phase, setPhase] = useState<Phase>(sessionId ? "ready" : "idle")
-  const [consent, setConsent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [remaining, setRemaining] = useState(RECORD_SECONDS)
   const [playing, setPlaying] = useState(false)
+  // "preparing" is the time between clone-created and audio-ready. During
+  // that window the Play button shows a spinner instead of making the user
+  // click once, wait, and then wait again on the server round-trip.
+  const [preparing, setPreparing] = useState(false)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const stopTimerRef = useRef<number | null>(null)
@@ -61,16 +64,18 @@ export default function VoiceClonePanel({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const prefetchRef = useRef<AbortController | null>(null)
+  // Memoised blob keyed by lineId so switching rounds re-prefetches but
+  // replays within a round reuse the same bytes.
+  const preparedForLineRef = useRef<number | null>(null)
 
-  // If the parent provides a sessionId (e.g. the player cloned on a
-  // previous round in this same match), stay in the "ready" state.
   useEffect(() => {
     if (sessionId && phase !== "ready" && phase !== "uploading") {
       setPhase("ready")
     }
   }, [sessionId, phase])
 
-  // Cleanup on unmount: stop any live recording and release the audio URL.
+  // Cleanup on unmount.
   useEffect(() => {
     return () => {
       recorderRef.current?.state === "recording" && recorderRef.current.stop()
@@ -78,6 +83,7 @@ export default function VoiceClonePanel({
       if (stopTimerRef.current) window.clearTimeout(stopTimerRef.current)
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current)
       abortRef.current?.abort()
+      prefetchRef.current?.abort()
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
@@ -89,9 +95,48 @@ export default function VoiceClonePanel({
     }
   }, [])
 
+  // When we have a session and the current line changes (or the session
+  // was just created), prefetch the audio so Play is instant.
+  useEffect(() => {
+    if (!sessionId || phase !== "ready") return
+    if (preparedForLineRef.current === line.id) return
+    prefetchRef.current?.abort()
+    // Invalidate the previous line's blob BEFORE we start fetching. If the
+    // user hits Play during the prefetch window, playInMyVoice must not
+    // find a stale URL that points at a different line.
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+    preparedForLineRef.current = null
+    const controller = new AbortController()
+    prefetchRef.current = controller
+    setPreparing(true)
+    void (async () => {
+      try {
+        const audio = await sayLine({
+          sessionId,
+          songId,
+          lineId: line.id,
+          text: line.text,
+          language,
+          signal: controller.signal,
+        })
+        if (controller.signal.aborted) return
+        audioUrlRef.current = URL.createObjectURL(audio)
+        preparedForLineRef.current = line.id
+      } catch (err) {
+        if ((err as DOMException | null)?.name === "AbortError") return
+        // Silent prefetch failure: Play will try again and surface the error.
+      } finally {
+        if (!controller.signal.aborted) setPreparing(false)
+      }
+    })()
+    return () => controller.abort()
+  }, [sessionId, phase, line.id, line.text, songId, language])
+
   const beginConsent = () => {
     setError(null)
-    setConsent(false)
     setPhase("consent")
   }
 
@@ -100,7 +145,6 @@ export default function VoiceClonePanel({
   }
 
   const startRecording = async () => {
-    if (!consent) return
     setError(null)
     let mic
     try {
@@ -138,8 +182,6 @@ export default function VoiceClonePanel({
       if (event.data && event.data.size > 0) chunksRef.current.push(event.data)
     }
     recorder.onstop = async () => {
-      // Tear the mic down the instant recording ends. We never need it
-      // again for the clone, and holding it keeps the OS indicator on.
       mic.stop()
       if (stopTimerRef.current) {
         window.clearTimeout(stopTimerRef.current)
@@ -183,6 +225,9 @@ export default function VoiceClonePanel({
     abortRef.current = controller
     try {
       const newId = await cloneVoice(blob, { signal: controller.signal })
+      // Reset the prefetch marker so the ready-effect kicks in with the
+      // new session id.
+      preparedForLineRef.current = null
       onSessionCreated(newId)
       setPhase("ready")
     } catch (err) {
@@ -202,34 +247,30 @@ export default function VoiceClonePanel({
   const playInMyVoice = async () => {
     if (!sessionId) return
     setError(null)
-    // Pause any previous playback.
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current = null
     }
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current)
-      audioUrlRef.current = null
-    }
     setPlaying(true)
     try {
-      const audio = await sayLine({
-        sessionId,
-        songId,
-        lineId: line.id,
-        text: line.text,
-        language,
-      })
-      const url = URL.createObjectURL(audio)
-      audioUrlRef.current = url
+      // Fast path: prefetched blob already decoded into a URL.
+      let url = audioUrlRef.current
+      if (!url) {
+        const audio = await sayLine({
+          sessionId,
+          songId,
+          lineId: line.id,
+          text: line.text,
+          language,
+        })
+        url = URL.createObjectURL(audio)
+        audioUrlRef.current = url
+        preparedForLineRef.current = line.id
+      }
       const el = new Audio(url)
       audioRef.current = el
       el.onended = () => {
         setPlaying(false)
-        if (audioUrlRef.current) {
-          URL.revokeObjectURL(audioUrlRef.current)
-          audioUrlRef.current = null
-        }
       }
       el.onerror = () => {
         setPlaying(false)
@@ -252,56 +293,48 @@ export default function VoiceClonePanel({
 
   if (phase === "idle") {
     return (
-      <div className="voice-clone-panel">
+      <div className="voice-clone-panel voice-clone-cta">
+        <div className="voice-clone-badge">New</div>
+        <h4 className="voice-clone-title">
+          <span aria-hidden="true">✨</span> Hear how you'd sound
+        </h4>
+        <p className="voice-clone-tagline">
+          Record a quick sample and we'll read this line back in your voice.
+        </p>
         <button
           type="button"
-          className="voice-clone-button"
+          className="voice-clone-button primary big"
           onClick={beginConsent}
         >
-          Hear it in my voice
+          Try it
         </button>
-        <small className="voice-clone-note">
-          AI voice copy, spoken — not sung.
-        </small>
       </div>
     )
   }
 
   if (phase === "consent") {
     return (
-      <div className="voice-clone-panel voice-clone-consent">
-        <p>
-          Record a short sample so Lyrica can play this line back in a voice
-          that sounds like yours. The copy is temporary.
-        </p>
+      <div className="voice-clone-panel voice-clone-cta">
+        <h4 className="voice-clone-title">Before we record you</h4>
         <ul>
           <li>Deleted when the match ends.</li>
           <li>Only used to play lines back to you.</li>
-          <li>Never shared with the other player.</li>
+          <li>Never shared with anyone else.</li>
         </ul>
-        <label className="voice-clone-consent-check">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-          />{" "}
-          I agree to record a {RECORD_SECONDS}-second voice sample.
-        </label>
         <div className="voice-clone-actions">
           <button
             type="button"
-            className="voice-clone-button primary"
+            className="voice-clone-button primary big"
             onClick={startRecording}
-            disabled={!consent}
           >
-            Record sample
+            Yes, record my voice
           </button>
           <button
             type="button"
             className="voice-clone-button ghost"
             onClick={cancelConsent}
           >
-            Cancel
+            Not now
           </button>
         </div>
       </div>
@@ -310,15 +343,15 @@ export default function VoiceClonePanel({
 
   if (phase === "recording") {
     return (
-      <div className="voice-clone-panel voice-clone-recording">
-        <p>Recording — read this out loud:</p>
+      <div className="voice-clone-panel voice-clone-cta voice-clone-recording">
+        <h4 className="voice-clone-title">Recording — read this out loud</h4>
         <blockquote className="voice-clone-prompt">
           {promptFor(language)}
         </blockquote>
         <p className="voice-clone-countdown">{remaining}s left</p>
         <button
           type="button"
-          className="voice-clone-button"
+          className="voice-clone-button primary"
           onClick={stopRecording}
         >
           Stop and use this take
@@ -329,19 +362,21 @@ export default function VoiceClonePanel({
 
   if (phase === "uploading") {
     return (
-      <div className="voice-clone-panel">
-        <p>Making your voice copy…</p>
+      <div className="voice-clone-panel voice-clone-cta">
+        <h4 className="voice-clone-title">Making your voice copy…</h4>
+        <p className="voice-clone-tagline">This usually takes a few seconds.</p>
       </div>
     )
   }
 
   if (phase === "error") {
     return (
-      <div className="voice-clone-panel voice-clone-error">
+      <div className="voice-clone-panel voice-clone-cta voice-clone-error">
+        <h4 className="voice-clone-title">Something went wrong</h4>
         <p>{error}</p>
         <button
           type="button"
-          className="voice-clone-button"
+          className="voice-clone-button primary"
           onClick={beginConsent}
         >
           Try again
@@ -351,19 +386,25 @@ export default function VoiceClonePanel({
   }
 
   // phase === "ready"
+  const buttonLabel = playing
+    ? "Playing…"
+    : preparing
+      ? "Loading your voice…"
+      : "Hear this line in your voice"
   return (
-    <div className="voice-clone-panel">
+    <div className="voice-clone-panel voice-clone-cta voice-clone-ready">
+      <h4 className="voice-clone-title">
+        <span aria-hidden="true">✨</span> Your voice is ready
+      </h4>
       <button
         type="button"
-        className="voice-clone-button primary"
+        className="voice-clone-button primary big"
         onClick={playInMyVoice}
-        disabled={playing}
+        disabled={playing || preparing}
       >
-        {playing ? "Playing…" : "Hear it in my voice"}
+        {buttonLabel}
       </button>
-      <small className="voice-clone-note">
-        AI voice copy, spoken — not sung.
-      </small>
+      <small className="voice-clone-note">AI copy, spoken — not sung.</small>
       {error && <p className="voice-clone-inline-error">{error}</p>}
     </div>
   )

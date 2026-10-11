@@ -5,7 +5,8 @@ export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
 // Length of one recorded turn. Every line's last syllable must end inside it,
 // or that syllable can't be sung in time and is always scored as missed.
-export const TURN_SECONDS = 4
+// 6 beats × 0.75 s/beat = 4.5 s; 5 leaves a small tail for the release.
+export const TURN_SECONDS = 5
 
 export type MatchPhase = "home" | "mode" | "song" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
 

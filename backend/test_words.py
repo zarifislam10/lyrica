@@ -109,10 +109,16 @@ class ServiceStateTest(unittest.TestCase):
     """503s when the service hasn't been initialized."""
 
     def test_require_service_without_init_raises_503(self):
+        from unittest import mock
+
         words._service = None
         words._init_error = "test: not initialized"
-        with self.assertRaises(Exception) as ctx:
-            words._require_service()
+        # _require_service retries init_words_service in production so a
+        # late-arriving calibration.json can be picked up. For this test we
+        # need the injected error to survive the retry.
+        with mock.patch.object(words, "init_words_service"):
+            with self.assertRaises(Exception) as ctx:
+                words._require_service()
         self.assertIn("test: not initialized", str(ctx.exception.detail))
         self.assertEqual(ctx.exception.status_code, 503)
 

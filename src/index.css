@@ -2419,17 +2419,41 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
-/* Voice clone panel (stretch): per-player on the result screen. */
+/* Voice clone panel (stretch): per-player on the result screen. The
+   player's accent colour is passed in via the --player CSS variable so
+   this panel reads as part of their score card. */
 .voice-clone-panel {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px dashed #4a2f52;
-  border-radius: 10px;
-  background: #19101e;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--player, #ff4fa3) 32%, #140b18) 0%,
+    #1b1021 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent);
   color: #fff8ff;
-  font-size: 13px;
+  font-size: 14px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.voice-clone-panel::after {
+  /* Soft spotlight to make the card feel lit from behind the title. */
+  content: "";
+  position: absolute;
+  inset: -40% -40% auto auto;
+  width: 70%;
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
 }
 
 .voice-clone-panel p,
@@ -2439,8 +2463,38 @@ button:focus-visible {
 }
 
 .voice-clone-panel ul {
-  padding-left: 18px;
-  color: #c4b5c9;
+  padding-left: 20px;
+  color: #ead6ee;
+  line-height: 1.5;
+}
+
+.voice-clone-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-clone-tagline {
+  color: #ead6ee;
+  line-height: 1.4;
+}
+
+.voice-clone-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--player, #ff4fa3) 70%, #140b18);
+  color: #140b18;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
 }
 
 .voice-clone-note {
@@ -2450,45 +2504,47 @@ button:focus-visible {
 }
 
 .voice-clone-prompt {
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-left: 3px solid var(--player, #ff4fa3);
-  background: #221728;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
   color: #ffe4f1;
   font-style: italic;
 }
 
-.voice-clone-consent-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  color: #e2d2e7;
-}
-
-.voice-clone-consent-check input {
-  margin-top: 3px;
-}
-
 .voice-clone-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .voice-clone-button {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid #6b3f78;
-  background: #2a1a32;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--player, #ff4fa3) 60%, transparent);
+  background: rgba(0, 0, 0, 0.3);
   color: #fff8ff;
   font-weight: 700;
   cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.voice-clone-button:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .voice-clone-button.primary {
   background: var(--player, #ff4fa3);
   border-color: transparent;
   color: #140b18;
+  box-shadow: 0 4px 14px
+    color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent);
+}
+
+.voice-clone-button.big {
+  padding: 14px 20px;
+  font-size: 15px;
+  letter-spacing: 0.3px;
 }
 
 .voice-clone-button.ghost {
@@ -2496,14 +2552,16 @@ button:focus-visible {
 }
 
 .voice-clone-button:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .voice-clone-countdown {
   color: #ffd1e6;
   font-weight: 800;
   letter-spacing: 0.5px;
+  font-size: 15px;
 }
 
 .voice-clone-error p,

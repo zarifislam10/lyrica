@@ -6,7 +6,10 @@
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000"
 const WORDS_TARGET_RATE = 16_000
-const WORDS_TIMEOUT_MS = 5_000
+// The first call after a backend restart has to build the per-song reference
+// features (decode the mp3 + run the model), which takes several seconds on
+// CPU. 5s wasn't enough and users saw "Words unavailable" on their first turn.
+const WORDS_TIMEOUT_MS = 15_000
 
 export type WordsResult = {
   words: number
