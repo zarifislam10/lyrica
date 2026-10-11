@@ -2070,6 +2070,104 @@ button:focus-visible {
   animation: pulse 1.8s ease-in-out infinite;
 }
 
+/* ---- Words card: two side-by-side bars (Tune, Words) + verdict + source. */
+.words-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.words-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.words-bar {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 6px;
+  background: rgb(11 7 16 / 0.55);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease-out,
+    transform 320ms ease-out;
+}
+
+.words-bar.enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.words-bar small {
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.words-bar strong {
+  margin: 0;
+  color: #fff;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(32px, 7vw, 52px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Tune number takes the player tint. Words stays neutral — it's a different
+   measurement and we don't want the colours to imply agreement. */
+.words-bar.tune strong {
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--player) 70%, transparent),
+    3px 3px 0 color-mix(in srgb, var(--player) 55%, transparent);
+}
+
+.words-bar.words strong {
+  color: #e8dcff;
+  text-shadow: 0 0 14px rgb(155 61 255 / 0.35);
+}
+
+.words-bar-caption {
+  color: #a69bb5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.words-bar-pending {
+  display: flex;
+  min-height: clamp(32px, 7vw, 52px);
+  align-items: center;
+  justify-content: center;
+  color: #d9c8ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.words-verdict {
+  margin: 0;
+  color: #e4d8ea;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.words-source {
+  margin: 0;
+  color: #8f8299;
+  font-size: 11px;
+  text-align: center;
+}
+
+.final-score-slots.words-card .words-bar strong,
+.words-card .words-bar strong {
+  font-size: clamp(32px, 7vw, 52px);
+}
+
 .final-score-slots {
   --player: #ff4fa3;
 }
