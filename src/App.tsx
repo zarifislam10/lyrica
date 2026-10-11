@@ -511,11 +511,9 @@ function ModeScreen({
 }
 
 function SongScreen({
-  selectedId,
   onChoose,
   onHome,
 }: {
-  selectedId: string
   onChoose: (songId: string) => void
   onHome: () => void
 }) {
@@ -530,12 +528,9 @@ function SongScreen({
         <div className="mode-options">
           {songs.map((song) => (
             <button
-              className={`mode-card ${
-                song.id === selectedId ? "selected" : ""
-              }`}
+              className="mode-card"
               type="button"
               key={song.id}
-              aria-pressed={song.id === selectedId}
               onClick={() => onChoose(song.id)}
             >
               <strong>{LANGUAGE_NAMES[song.language]}</strong>
@@ -1354,7 +1349,6 @@ export default function App() {
         )}
         {state.phase === "song" && (
           <SongScreen
-            selectedId={state.song.id}
             onChoose={(songId) => dispatch({ type: "SELECT_SONG", songId })}
             onHome={goHome}
           />

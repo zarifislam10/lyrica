@@ -2083,7 +2083,3 @@ button:focus-visible {
   font-size: 22px;
   font-weight: 700;
 }
-
-.mode-card.selected {
-  border-color: #ff4fa3;
-}
