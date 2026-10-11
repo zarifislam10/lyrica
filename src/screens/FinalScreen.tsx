@@ -1,11 +1,13 @@
 import {
   PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
   type MatchState,
   displayName,
   soloTotal,
 } from "@/domain/match"
+import WordsCard from "@/components/WordsCard"
+import LeaderboardPanel from "@/screens/LeaderboardPanel"
 import SongTag from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
 
 function SoloFinal({ state }: { state: MatchState }) {
   return (
@@ -13,13 +15,15 @@ function SoloFinal({ state }: { state: MatchState }) {
       <p className="player-chip" style={{ color: PLAYER_COLORS[0] }}>
         {displayName(state, 0)}
       </p>
-      <div className="score-slots final-score-slots">
-        <div className="score-slot">
-          <small>Tune</small>
-          <strong>{soloTotal(state)}</strong>
-        </div>
-        <WordsComingSoon />
-      </div>
+      {/* Final-screen Words bar is intentionally wav={null} — per-round
+       takes aren't aggregated, so we show the Tune total alongside an
+       honest "Unavailable" word score rather than inventing a number. */}
+      <WordsCard
+        tune={soloTotal(state)}
+        wav={null}
+        songId={state.song.id}
+        lineId={0}
+      />
       {state.soloScores.length > 1 && (
         <div className="solo-rounds">
           {state.soloScores.map((score, index) => (
@@ -36,11 +40,11 @@ function SoloFinal({ state }: { state: MatchState }) {
 
 function BattleFinal({ state }: { state: MatchState }) {
   const winner: 0 | 1 = state.roundWins[0] >= state.roundWins[1] ? 0 : 1
-  // One round: show the Tune scores that decided it, not a 1 – 0 tally.
+  // One round: "1 – 0" says nothing, so show the Tune scores instead.
   const tally =
-    state.rounds > 1
-      ? state.roundWins
-      : [state.turnScores[0] ?? 0, state.turnScores[1] ?? 0]
+    ROUNDS_PER_MATCH === 1
+      ? [state.turnScores[0] ?? 0, state.turnScores[1] ?? 0]
+      : state.roundWins
 
   return (
     <>
@@ -83,6 +87,7 @@ export default function FinalScreen({
             Home
           </button>
         </div>
+        <LeaderboardPanel language={state.song.language} />
       </section>
     </main>
   )

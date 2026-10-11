@@ -6,9 +6,6 @@ export const MAX_NAME_LENGTH = 12
 // Length of one recorded turn. Every line's last syllable must end inside it,
 // or that syllable can't be sung in time and is always scored as missed.
 export const TURN_SECONDS = 4
-// Rounds in a match. Solo sings this many lines; Battle needs a majority of
-// them to win. Songs carry three lines, so this can go up to 3.
-export const ROUNDS_PER_MATCH: RoundNumber = 1
 
 export type MatchPhase = "home" | "mode" | "song" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
 
@@ -17,14 +14,18 @@ export type GameMode = "solo" | "battle"
 export type PlayerIndex = 0 | 1
 export type RoundNumber = 1 | 2 | 3
 
+// One round keeps the demo short. Raise to 3 for best of three; every
+// screen and the end-of-match check follow this number.
+export const ROUNDS_PER_MATCH: RoundNumber = 1
+// A majority of rounds wins a battle early (2 of 3, or 1 of 1).
+const WINS_NEEDED = Math.floor(ROUNDS_PER_MATCH / 2) + 1
+
 export type MatchState = {
   phase: MatchPhase
   mode: GameMode
   // The song being sung; each round sings its next line.
   song: Song
   names: [string, string]
-  // How many rounds this match plays (ROUNDS_PER_MATCH unless a test asks).
-  rounds: RoundNumber
   round: RoundNumber
   openingSinger: PlayerIndex
   firstSinger: PlayerIndex
@@ -111,14 +112,12 @@ export function createMatchState(
   names: [string, string] = ["", ""],
   mode: GameMode = "battle",
   song: Song = songs[0],
-  rounds: RoundNumber = ROUNDS_PER_MATCH,
 ): MatchState {
   return {
     phase: "home",
     mode,
     song,
     names,
-    rounds,
     round: 1,
     openingSinger: 0,
     firstSinger: 0,
@@ -171,10 +170,9 @@ function afterBothSung(state: MatchState): MatchState {
 }
 
 export function isMatchOver(state: MatchState): boolean {
-  if (state.round >= state.rounds) return true
+  if (state.round >= ROUNDS_PER_MATCH) return true
   if (state.mode === "solo") return false
-  const winsNeeded = Math.floor(state.rounds / 2) + 1
-  return state.roundWins[0] >= winsNeeded || state.roundWins[1] >= winsNeeded
+  return state.roundWins[0] >= WINS_NEEDED || state.roundWins[1] >= WINS_NEEDED
 }
 
 function applyTurnScore(
@@ -255,7 +253,7 @@ export function matchReducer(
       ]
       persistNames(state.names)
       return {
-        ...createMatchState(names, state.mode, state.song, state.rounds),
+        ...createMatchState(names, state.mode, state.song),
         phase: "turnReady",
         firstSinger: 0,
         currentPlayer: 0,
@@ -287,7 +285,7 @@ export function matchReducer(
       const opener =
         state.mode === "solo" ? 0 : otherPlayer(state.openingSinger)
       return {
-        ...createMatchState(state.names, state.mode, state.song, state.rounds),
+        ...createMatchState(state.names, state.mode, state.song),
         phase: "turnReady",
         openingSinger: opener,
         firstSinger: opener,
@@ -297,7 +295,7 @@ export function matchReducer(
     case "GO_HOME":
       // Keep the last song so the picker starts on it next time.
       return {
-        ...createMatchState(state.names, "battle", state.song, state.rounds),
+        ...createMatchState(state.names, "battle", state.song),
         phase: "home",
       }
     default:
@@ -306,18 +304,9 @@ export function matchReducer(
 }
 
 export function fallbackCommentary(state: MatchState): string {
-  const single = state.rounds === 1
   if (state.mode === "solo") {
-    const name = displayName(state, 0)
-    return single
-      ? `${name} finishes the line`
-      : `${name} finishes round ${state.round}`
+    return `${displayName(state, 0)} finishes round ${state.round}`
   }
-  if (state.roundWinner === null) {
-    return single ? "The battle is done" : `Round ${state.round} is done`
-  }
-  const winner = displayName(state, state.roundWinner)
-  return single
-    ? `${winner} wins the battle`
-    : `${winner} takes round ${state.round}`
+  if (state.roundWinner === null) return `Round ${state.round} is done`
+  return `${displayName(state, state.roundWinner)} takes round ${state.round}`
 }

@@ -3,17 +3,15 @@ import { describe, expect, it } from "vitest"
 import { songs } from "@/data/songs"
 
 import {
-  ROUNDS_PER_MATCH,
   createMatchState,
   displayName,
-  fallbackCommentary,
   lineForRound,
+  ROUNDS_PER_MATCH,
   matchReducer,
   normalizeName,
   soloTotal,
   type GameMode,
   type MatchState,
-  type RoundNumber,
 } from "@/domain/match"
 
 function turn(score: number, timing = 0.8, missed: number[] = []) {
@@ -26,11 +24,10 @@ function turn(score: number, timing = 0.8, missed: number[] = []) {
   }
 }
 
-function started(mode: GameMode = "battle", rounds?: RoundNumber) {
-  const picking = matchReducer(
-    createMatchState(["Ava", "Sam"], "battle", songs[0], rounds),
-    { type: "GO_MODE" },
-  )
+function started(mode: GameMode = "battle") {
+  const picking = matchReducer(createMatchState(["Ava", "Sam"]), {
+    type: "GO_MODE",
+  })
   const setup = matchReducer(picking, { type: "CHOOSE_MODE", mode })
   return matchReducer(setup, { type: "START_MATCH" })
 }
@@ -97,59 +94,24 @@ describe("matchReducer", () => {
     expect(tiedAgain.roundWins).toEqual([0, 0])
   })
 
-  it("plays one round by default and ends on its winner", () => {
+  it("plays a single round for the demo", () => {
     expect(ROUNDS_PER_MATCH).toBe(1)
-    let state = started()
-    expect(state.rounds).toBe(1)
-    state = playRound(state, turn(60), turn(90))
+  })
+
+  it("ends the battle after one decided round", () => {
+    let state = playRound(started(), turn(60), turn(90))
     expect(state.phase).toBe("roundResult")
+    expect(state.roundWinner).toBe(1)
     state = matchReducer(state, { type: "ROUND_CONTINUE" })
     expect(state.phase).toBe("final")
+    expect(state.round).toBe(1)
     expect(state.roundWins).toEqual([0, 1])
   })
 
-  it("still replays a tie when the match is a single round", () => {
+  it("still replays a tie instead of ending the one-round battle", () => {
     const tied = playRound(started(), turn(80, 0.7), turn(80, 0.7))
     expect(tied.phase).toBe("turnReady")
     expect(tied.round).toBe(1)
-  })
-
-  it("plays a third round at 1-1 in a best of three", () => {
-    let state = started("battle", 3)
-    state = playRound(state, turn(90), turn(60))
-    state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    state = playRound(state, turn(90), turn(60))
-    state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    expect(state.roundWins).toEqual([1, 1])
-    expect(state.phase).toBe("turnReady")
-    expect(state.round).toBe(3)
-  })
-
-  it("keeps the round count through a rematch and going home", () => {
-    let state = started("battle", 3)
-    state = matchReducer(state, { type: "REMATCH" })
-    expect(state.rounds).toBe(3)
-    state = matchReducer(state, { type: "GO_HOME" })
-    expect(state.rounds).toBe(3)
-    expect(matchReducer(state, { type: "START_MATCH" }).rounds).toBe(3)
-  })
-
-  it("alternates who sings first and skips round 3 at 2-0", () => {
-    let state = started("battle", 3)
-    for (let round = 0; round < 2; round += 1) {
-      expect(state.currentPlayer).toBe(round === 0 ? 0 : 1)
-      const avaFirst = state.currentPlayer === 0
-      state = playRound(
-        state,
-        turn(avaFirst ? 90 : 60),
-        turn(avaFirst ? 60 : 90),
-      )
-      expect(state.phase).toBe("roundResult")
-      state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    }
-    expect(state.phase).toBe("final")
-    expect(state.roundWins).toEqual([2, 0])
-    expect(state.round).toBe(2)
   })
 
   it("rematch keeps names and swaps who sings first", () => {
@@ -193,11 +155,11 @@ describe("matchReducer", () => {
 describe("song selection", () => {
   const arabic = songs.find((s) => s.language === "ar")!
 
-  function chosen(songId: string, rounds?: RoundNumber) {
-    const choosing = matchReducer(
-      createMatchState(["Ava", "Sam"], "battle", songs[0], rounds),
-      { type: "CHOOSE_MODE", mode: "battle" },
-    )
+  function chosen(songId: string) {
+    const choosing = matchReducer(createMatchState(["Ava", "Sam"]), {
+      type: "CHOOSE_MODE",
+      mode: "battle",
+    })
     return matchReducer(choosing, { type: "SELECT_SONG", songId })
   }
 
@@ -221,14 +183,10 @@ describe("song selection", () => {
     ).toBe(choosing)
   })
 
-  it("sings the song's line for each round", () => {
-    let state = matchReducer(chosen(arabic.id, 3), { type: "START_MATCH" })
+  it("sings the song's first line", () => {
+    const state = matchReducer(chosen(arabic.id), { type: "START_MATCH" })
     expect(state.song).toBe(arabic)
     expect(lineForRound(state)).toBe(arabic.lines[0])
-    state = playRound(state, turn(90), turn(40))
-    state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    expect(state.round).toBe(2)
-    expect(lineForRound(state)).toBe(arabic.lines[1])
   })
 
   it("keeps the song through a rematch and going home", () => {
@@ -252,24 +210,13 @@ describe("solo mode", () => {
     expect(afterTake.soloScores).toEqual([72])
   })
 
-  it("sings one line by default, then shows that score as the total", () => {
-    let state = matchReducer(started("solo"), turn(83))
+  it("ends after one line with that line's score as the total", () => {
+    let state = matchReducer(started("solo"), turn(81))
     state = matchReducer(state, { type: "ROUND_CONTINUE" })
     expect(state.phase).toBe("final")
-    expect(soloTotal(state)).toBe(83)
-  })
-
-  it("plays every line of a three-round match, then averages the scores", () => {
-    let state = started("solo", 3)
-    for (const score of [90, 60, 81]) {
-      expect(state.currentPlayer).toBe(0)
-      state = matchReducer(state, turn(score))
-      state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    }
-    expect(state.phase).toBe("final")
-    expect(state.round).toBe(3)
-    expect(state.soloScores).toEqual([90, 60, 81])
-    expect(soloTotal(state)).toBe(77)
+    expect(state.round).toBe(1)
+    expect(state.soloScores).toEqual([81])
+    expect(soloTotal(state)).toBe(81)
   })
 
   it("sing again stays solo and clears the scores", () => {
@@ -287,20 +234,5 @@ describe("solo mode", () => {
       names: ["Ava", "Ava"] as [string, string],
     }
     expect(displayName(state, 0)).toBe("Ava")
-  })
-})
-
-describe("fallbackCommentary", () => {
-  it("doesn't mention round numbers in a single-round match", () => {
-    expect(fallbackCommentary(matchReducer(started("solo"), turn(70)))).toBe(
-      "Ava finishes the line",
-    )
-    const battle = playRound(started(), turn(60), turn(90))
-    expect(fallbackCommentary(battle)).toBe("Sam wins the battle")
-  })
-
-  it("names the round in a longer match", () => {
-    const battle = playRound(started("battle", 3), turn(90), turn(60))
-    expect(fallbackCommentary(battle)).toBe("Ava takes round 1")
   })
 })

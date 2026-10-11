@@ -1,4 +1,9 @@
-import { PLAYER_COLORS, type MatchState, displayName } from "@/domain/match"
+import {
+  PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
+  type MatchState,
+  displayName,
+} from "@/domain/match"
 import SongTag, { SongTitle } from "@/screens/SongTag"
 
 export default function HandoverScreen({
@@ -10,7 +15,7 @@ export default function HandoverScreen({
 }) {
   const next = state.currentPlayer
   const previous = next === 0 ? 1 : 0
-  const multiRound = state.rounds > 1
+  const multiRound = ROUNDS_PER_MATCH > 1
 
   return (
     <main className="screen handover-screen">
