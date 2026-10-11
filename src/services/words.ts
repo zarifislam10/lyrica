@@ -79,7 +79,8 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
   // Start as soon as possible; the caller usually calls stop() a few seconds later.
   try {
     recorder.start()
-  } catch {
+  } catch (err) {
+    console.warn("[words] recorder.start() threw", err)
     return {
       stop: async () => null,
       dispose: () => {},
@@ -103,14 +104,17 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     return new Promise<Blob | null>((resolve) => {
       const finish = async () => {
         if (chunks.length === 0) {
+          console.warn("[words] stop(): no chunks captured by MediaRecorder")
           resolve(null)
           return
         }
         const raw = new Blob(chunks, { type: mimeType ?? "audio/webm" })
         try {
           const wav = await rawBlobToWav16kMono(raw)
+          if (!wav) console.warn("[words] rawBlobToWav16kMono returned null")
           resolve(wav)
-        } catch {
+        } catch (err) {
+          console.warn("[words] rawBlobToWav16kMono threw", err)
           resolve(null)
         }
       }
@@ -132,7 +136,10 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
 
 async function rawBlobToWav16kMono(raw: Blob): Promise<Blob | null> {
   const buffer = await raw.arrayBuffer()
-  if (buffer.byteLength === 0) return null
+  if (buffer.byteLength === 0) {
+    console.warn("[words] raw blob was empty")
+    return null
+  }
 
   // We decode in a short-lived AudioContext so we don't tangle with the mic
   // session's context; closed immediately after.
@@ -145,13 +152,17 @@ async function rawBlobToWav16kMono(raw: Blob): Promise<Blob | null> {
     (window as unknown as {
       webkitOfflineAudioContext?: typeof OfflineAudioContext
     }).webkitOfflineAudioContext
-  if (!AudioCtor || !OfflineCtor) return null
+  if (!AudioCtor || !OfflineCtor) {
+    console.warn("[words] AudioContext/OfflineAudioContext unavailable")
+    return null
+  }
 
   const decodeCtx = new AudioCtor()
   let decoded: AudioBuffer
   try {
     decoded = await decodeCtx.decodeAudioData(buffer.slice(0))
-  } catch {
+  } catch (err) {
+    console.warn("[words] decodeAudioData failed", err)
     void decodeCtx.close().catch(() => {})
     return null
   }
@@ -238,11 +249,18 @@ export async function postWordsScore(
       body: form,
       signal: controller.signal,
     })
-    if (!response.ok) return null
+    if (!response.ok) {
+      console.warn("[words] /words-score responded", response.status)
+      return null
+    }
     const data: unknown = await response.json()
-    if (!isWordsResult(data)) return null
+    if (!isWordsResult(data)) {
+      console.warn("[words] response JSON did not match WordsResult", data)
+      return null
+    }
     return data
-  } catch {
+  } catch (err) {
+    console.warn("[words] fetch to /words-score threw", err)
     return null
   } finally {
     window.clearTimeout(timer)
