@@ -2155,3 +2155,23 @@ button:focus-visible {
   font-size: 22px;
   font-weight: 700;
 }
+
+/* Gemini's practice tip, worded from the syllables our scorer marked missed. */
+.coach-tip {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--player, #ff4fa3);
+  border-radius: 8px;
+  color: #fff8ff;
+  background: #1d1422;
+}
+
+.coach-tip small {
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
