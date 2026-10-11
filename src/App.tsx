@@ -156,16 +156,16 @@ function DotStar({
 
 function LogoMic() {
   return (
-    <svg className="logo-mic" viewBox="0 0 44 84" aria-hidden="true">
-      <rect x="9" y="5" width="28" height="30" rx="14" fill="#19B5FF" />
-      <rect x="13" y="33" width="20" height="46" rx="10" fill="#19B5FF" />
-      <rect x="10" y="32" width="20" height="46" rx="10" fill="#FF4FA3" />
-      <rect x="14" y="38" width="3.5" height="14" rx="1.75" fill="#FFB3D6" />
-      <rect x="18" y="46" width="6" height="9" rx="2" fill="#1A0F22" />
-      <rect x="6" y="2" width="28" height="30" rx="14" fill="#FFF8FF" />
-      <rect x="11" y="10" width="18" height="3.6" rx="1.8" fill="#1A0F22" />
-      <rect x="11" y="16.4" width="18" height="3.6" rx="1.8" fill="#1A0F22" />
-      <rect x="11" y="22.8" width="18" height="3.6" rx="1.8" fill="#1A0F22" />
+    <svg className="logo-mic" viewBox="0 0 38 100" aria-hidden="true">
+      <rect x="11" y="37" width="24" height="62" rx="12" fill="#19B5FF" />
+      <rect x="7" y="35" width="24" height="62" rx="12" fill="#FF4FA3" />
+      <rect x="11.5" y="43" width="4" height="22" rx="2" fill="#FFB3D6" />
+      <rect x="19" y="52" width="7" height="12" rx="2.5" fill="#1A0F22" />
+      <rect x="4" y="4" width="34" height="32" rx="16" fill="#19B5FF" />
+      <rect x="1" y="1" width="34" height="32" rx="16" fill="#FFF8FF" />
+      <rect x="8" y="9.5" width="20" height="4" rx="2" fill="#1A0F22" />
+      <rect x="8" y="16" width="20" height="4" rx="2" fill="#1A0F22" />
+      <rect x="8" y="22.5" width="20" height="4" rx="2" fill="#1A0F22" />
     </svg>
   )
 }

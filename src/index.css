@@ -171,7 +171,7 @@ button:focus-visible {
 }
 
 .home-eyebrow {
-  margin: 0 0 clamp(52px, 9vw, 96px) !important;
+  margin: 0 0 38px !important;
   color: #19b5ff !important;
   font-size: 10px !important;
   font-weight: 800;
@@ -331,15 +331,21 @@ button:focus-visible {
   animation-direction: reverse, alternate;
 }
 
+.home-content h1 > i {
+  width: 0.36em;
+  height: 0.95em;
+  margin: 0 0.04em;
+  background: none;
+}
+
 .logo-mic {
   position: absolute;
-  bottom: calc(100% + 0.03em);
-  left: 50%;
-  width: 0.28em;
-  margin-left: -0.14em;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: visible;
   transform-origin: 50% 100%;
-  filter: drop-shadow(0 0 0.05em rgb(255 79 163 / 0.6));
+  filter: drop-shadow(0 0 0.05em rgb(255 79 163 / 0.55));
   animation: micSway 2.6s ease-in-out infinite alternate;
 }
 
@@ -383,8 +389,8 @@ button:focus-visible {
 }
 
 .home-content h1 > i::after {
-  bottom: calc(100% + 2.6em);
-  left: calc(50% - 2.2em);
+  bottom: calc(100% - 1em);
+  left: calc(100% + 1.4em);
   color: #19b5ff;
   font-size: 0.12em;
   transform: none;
@@ -423,10 +429,10 @@ button:focus-visible {
 
 @keyframes micSway {
   from {
-    rotate: 14deg;
+    rotate: -4deg;
   }
   to {
-    rotate: 34deg;
+    rotate: 5deg;
   }
 }
 
