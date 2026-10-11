@@ -53,6 +53,7 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     MediaRecorder?: typeof MediaRecorder
   }).MediaRecorder
   if (!Rec) {
+    console.warn("[words] MediaRecorder is not available in this browser")
     return {
       stop: async () => null,
       dispose: () => {},
@@ -60,11 +61,13 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
   }
 
   const mimeType = pickMimeType()
+  console.warn("[words] startWordsCapture mimeType=", mimeType ?? "(default)")
   const options = mimeType ? { mimeType } : undefined
   let recorder: MediaRecorder
   try {
     recorder = new Rec(stream, options)
-  } catch {
+  } catch (err) {
+    console.warn("[words] new MediaRecorder() threw", err)
     return {
       stop: async () => null,
       dispose: () => {},
@@ -99,6 +102,12 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
   }
 
   const stop = (): Promise<Blob | null> => {
+    console.warn(
+      "[words] stop() called; state=",
+      recorder.state,
+      "chunks=",
+      chunks.length,
+    )
     if (stopped) return Promise.resolve(null)
     stopped = true
     return new Promise<Blob | null>((resolve) => {
