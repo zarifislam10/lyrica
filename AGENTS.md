@@ -148,7 +148,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 - Happy Birthday in English, Korean, and Arabic (`src/data/songs.ts`, melody typed once as semitones) + song picker. Flow is home → mode → song → setup; `state.song` holds the choice and `lineForRound(state)` reads its lines. `src/data/lines.ts` is a fixture for `scoring.test.ts` only — PR #18.
 
 **In flight:**
-- `laiba-hear-it`: `backend/generate_hear_it.py` renders the "Hear it" clips with ElevenLabs TTS. Clips not yet generated or committed.
+- `laiba-hear-it`: `backend/generate_hear_it.py` renders the "Hear it" clips with ElevenLabs TTS; clips for all three songs are in `public/songs/`. Korean pronunciation still needs a native speaker's ear.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
 
 ## Current task owners
