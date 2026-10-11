@@ -335,12 +335,11 @@ function PitchLane({
   missed?: number[]
 }) {
   const clipWidth = Math.max(0, Math.min(1, progress)) * 320
-  const singerMedian =
-    samples && samples.length > 0 ? timeWeightedMedianPitch(samples) : null
-  const voicePoints =
-    samples && singerMedian !== null
-      ? samplesPath(samples, durationMs, singerMedian)
-      : ""
+  const voicePoints = useMemo(() => {
+    if (!samples || samples.length === 0) return ""
+    const median = timeWeightedMedianPitch(samples)
+    return median === null ? "" : samplesPath(samples, durationMs, median)
+  }, [samples, durationMs])
 
   return (
     <div className="pitch-lane" aria-label="Target pitch lane">
