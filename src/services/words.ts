@@ -110,13 +110,11 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
           resolve(null)
           return
         }
-        const raw = new Blob(chunks, { type: mimeType ?? "audio/webm" })
-        try {
-          const wav = await rawBlobToWav16kMono(raw)
-          resolve(wav)
-        } catch {
-          resolve(null)
-        }
+        // Resolve the raw recorder blob (webm/opus or mp4/aac) so playback
+        // sounds like the player actually recorded. The 16 kHz mono WAV
+        // we used to build here was lossy and quiet on playback; the
+        // backend Words path is bypassed in demo mode anyway.
+        resolve(new Blob(chunks, { type: mimeType ?? "audio/webm" }))
       }
       recorder.onstop = () => void finish()
       if (recorder.state === "inactive") {
