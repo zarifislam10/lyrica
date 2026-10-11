@@ -5,7 +5,9 @@ scoring and match outcomes; this backend generates commentary and audio, with no
 
 ## Local setup
 
-From this backend folder:
+From this backend folder, with Python 3.11 or newer (the pinned packages don't
+install on 3.9). If `python3 --version` is older, `uv venv --python 3.12 .venv`
+downloads a ready-made Python instead of building one.
 
 ```sh
 python3 -m venv .venv
@@ -42,7 +44,9 @@ CORS controls which browser origins can read responses; it is not authentication
 
 Add `GEMINI_API_KEY` to your existing local `.env`. Use `.env.example` for the new
 optional settings; do not overwrite an existing `.env`. Restart the backend.
-`GEMINI_MODEL` defaults to `gemini-2.5-flash`. Round speech uses
+`GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. `gemini-2.5-flash` now returns
+404 for new keys, and full-size Flash models spend the 256-token budget on thinking,
+so their replies come back incomplete and the round falls back. Round speech uses
 `ELEVENLABS_ROUND_MODEL_ID=eleven_flash_v2_5` for low latency; the welcome keeps its
 existing model. Both use the same `ELEVENLABS_VOICE_ID`.
 

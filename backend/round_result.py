@@ -62,7 +62,7 @@ def fallback_commentary(result: RoundResultRequest) -> str:
 
 async def generate_commentary(client: httpx.AsyncClient, result: RoundResultRequest,
                               api_key: str) -> str:
-    model = quote(os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), safe="")
+    model = quote(os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"), safe="")
     response = await client.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         headers={"x-goog-api-key": api_key},
