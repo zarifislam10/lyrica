@@ -48,7 +48,10 @@ optional settings; do not overwrite an existing `.env`. Restart the backend.
 404 for new keys, and full-size Flash models spend the 256-token budget on thinking,
 so their replies come back incomplete and the round falls back. Round speech uses
 `ELEVENLABS_ROUND_MODEL_ID=eleven_flash_v2_5` for low latency; the welcome keeps its
-existing model. Both use the same `ELEVENLABS_VOICE_ID`.
+existing model and `ELEVENLABS_VOICE_ID`. Round speech (Aux) uses
+`ELEVENLABS_ANNOUNCER_VOICE_ID`, which defaults to Jessica
+(`cgSgspJ2msm6clMCkdW9`, young, bright and playful) when unset; it is separate so
+changing Aux's voice never changes the "Hear it" clips.
 
 The following is the initial API contract; the current checked-out frontend does
 not yet call it. Coordinate the field names with Jasleen before integrating.

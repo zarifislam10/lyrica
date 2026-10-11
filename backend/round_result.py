@@ -92,8 +92,14 @@ async def generate_commentary(client: httpx.AsyncClient, result: RoundResultRequ
     return f"{outcome_text(result)} {text}"
 
 
+ANNOUNCER_VOICE_ID = "cgSgspJ2msm6clMCkdW9"  # ElevenLabs "Jessica": young, bright, playful
+
+
 async def generate_audio(client: httpx.AsyncClient, commentary: str, api_key: str) -> str:
-    voice = quote(os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb"), safe="")
+    # Aux has its own voice setting so changing it never changes the "Hear it"
+    # pronunciation clips, which use ELEVENLABS_VOICE_ID.
+    voice_id = os.getenv("ELEVENLABS_ANNOUNCER_VOICE_ID", "").strip() or ANNOUNCER_VOICE_ID
+    voice = quote(voice_id, safe="")
     response = await client.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
         params={"output_format": "mp3_44100_128"},
