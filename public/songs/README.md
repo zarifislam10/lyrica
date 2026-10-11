@@ -3,6 +3,9 @@
 One spoken "Hear it" clip per language, rendered by us with ElevenLabs TTS.
 No audio from any other recording.
 
+Generate them from `backend/` with `python generate_hear_it.py` (see
+`backend/README.md`), listen to each one, then commit them.
+
 ```
 happy-birthday-en.mp3
 happy-birthday-ko.mp3
