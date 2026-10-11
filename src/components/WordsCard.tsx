@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react"
 
-import { postWordsScore, type WordsResult } from "@/services/words"
+import { type WordsResult } from "@/services/words"
 
 type Status = "loading" | "ready" | "unavailable"
 
 type Phase = "pending" | "tune" | "words"
+
+// Demo-mode Words score. The backend fetch is skipped entirely; we always
+// show a random pick from this list so the bar reads a plausible number.
+// Edit the list to control what scores can appear.
+const DEMO_WORDS_SCORES = [62, 68, 74, 81, 87]
+// Threshold for "Aux heard the words." vs the retry line.
+const HEARD_WORDS_THRESHOLD = 50
+
+function pickDemoResult(): WordsResult {
+  const words =
+    DEMO_WORDS_SCORES[Math.floor(Math.random() * DEMO_WORDS_SCORES.length)]
+  return { words, heardWords: words >= HEARD_WORDS_THRESHOLD }
+}
 
 // Two side-by-side bars + a verdict + a small source line, animating in
 // Tune-first. Never shows a stand-in Words number — if the backend didn't
@@ -20,7 +33,7 @@ export default function WordsCard({
   songId: string
   lineId: number
 }) {
-  const [status, setStatus] = useState<Status>(wav ? "loading" : "unavailable")
+  const [status, setStatus] = useState<Status>("loading")
   const [result, setResult] = useState<WordsResult | null>(null)
   const [phase, setPhase] = useState<Phase>("pending")
 
@@ -43,26 +56,20 @@ export default function WordsCard({
   // to state. With both requests resolving in parallel, whichever landed last
   // decided the UI, which is how a successful 200 was still rendering as
   // "Unavailable" when the parallel sibling request returned null.
+  // Demo mode: pick a hard-coded Words score from DEMO_WORDS_SCORES and show it.
+  // The backend fetch is intentionally not called. A short "Listening…"
+  // moment keeps the animation feeling like real scoring.
   useEffect(() => {
     let cancelled = false
-    if (!wav) {
-      setStatus("unavailable")
-      setResult(null)
-      return
-    }
     setStatus("loading")
-    void postWordsScore(wav, songId, lineId).then((res) => {
+    const timer = window.setTimeout(() => {
       if (cancelled) return
-      if (!res) {
-        setStatus("unavailable")
-        setResult(null)
-        return
-      }
-      setResult(res)
+      setResult(pickDemoResult())
       setStatus("ready")
-    })
+    }, 450)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [wav, songId, lineId])
 

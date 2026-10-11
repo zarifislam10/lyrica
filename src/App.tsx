@@ -38,6 +38,7 @@ import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
 import { LANGUAGE_NAMES } from "@/screens/SongTag"
 import WordsCard from "@/components/WordsCard"
+import MyTakePlayback from "@/components/MyTakePlayback"
 import VoiceClonePanel from "@/components/VoiceClonePanel"
 import { deleteVoice } from "@/services/voiceClone"
 import {
@@ -1308,6 +1309,7 @@ function RoundResultScreen({
                   songId={state.song.id}
                   lineId={line.id}
                 />
+                <MyTakePlayback wav={wordsBlobs[player] ?? null} />
                 <p>{coach.body}</p>
                 {announcer.coaching[PLAYER_IDS[player]] && (
                   <p className="coach-tip">
