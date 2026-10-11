@@ -608,6 +608,7 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 
 function SingScreen({
   line,
+  audioUrl,
   language,
   round,
   playerLabel,
@@ -617,6 +618,7 @@ function SingScreen({
   onScored,
 }: {
   line: PracticeLine
+  audioUrl: string
   language: Language
   round: 1 | 2 | 3
   playerLabel: string
@@ -631,7 +633,9 @@ function SingScreen({
   const [liveSamples, setLiveSamples] = useState<PitchSample[]>([])
   const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
+  const [clipFailed, setClipFailed] = useState(false)
 
+  const referenceRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const detectorRef = useRef<ReturnType<typeof createPitchDetector> | null>(
     null,
@@ -654,6 +658,54 @@ function SingScreen({
 
   useEffect(() => cleanup, [])
 
+  const clipStart = line.audioStart ?? 0
+  const clipEnd = line.audioEnd
+
+  const stopReference = () => {
+    const audio = referenceRef.current
+    if (audio) {
+      audio.pause()
+      audio.currentTime = clipStart
+    }
+    setReferencePlaying(false)
+  }
+
+  const toggleReference = () => {
+    const audio = referenceRef.current
+    if (!audio || clipFailed) return
+    if (referencePlaying) {
+      stopReference()
+      return
+    }
+    audio.currentTime = clipStart
+    setReferencePlaying(true)
+    audio.play().catch((err: unknown) => {
+      setReferencePlaying(false)
+      if (err instanceof DOMException && err.name === "NotSupportedError") {
+        setClipFailed(true)
+      }
+    })
+  }
+
+  // timeupdate fires only ~4 times a second, which would bleed into the next
+  // line of the clip, so watch the end of the range every frame instead.
+  useEffect(() => {
+    if (!referencePlaying || clipEnd === undefined) return
+    let frame = 0
+    const watch = () => {
+      const audio = referenceRef.current
+      if (audio && audio.currentTime >= clipEnd) {
+        stopReference()
+        return
+      }
+      frame = requestAnimationFrame(watch)
+    }
+    frame = requestAnimationFrame(watch)
+    return () => cancelAnimationFrame(frame)
+  }, [referencePlaying, clipEnd])
+
+  useEffect(() => () => referenceRef.current?.pause(), [])
+
   useEffect(() => {
     const onHidden = () => {
       if (document.visibilityState !== "hidden") return
@@ -671,6 +723,7 @@ function SingScreen({
 
   const startRecording = async () => {
     if (singState !== "ready") return
+    stopReference()
     setError(null)
     setProgress(0)
     setLiveSamples([])
@@ -823,14 +876,30 @@ function SingScreen({
           </div>
           <button
             className={`hear-button ${referencePlaying ? "playing" : ""}`}
-            onClick={() => setReferencePlaying((playing) => !playing)}
+            onClick={toggleReference}
+            disabled={clipFailed || singState !== "ready"}
+            title={clipFailed ? "This line's audio isn't available" : undefined}
             aria-label={
-              referencePlaying ? "Pause reference line" : "Hear reference line"
+              clipFailed
+                ? "Reference line unavailable"
+                : referencePlaying
+                  ? "Stop reference line"
+                  : "Hear reference line"
             }
           >
             <SpeakerIcon />
             <span>{referencePlaying ? "Playing" : "Hear it"}</span>
           </button>
+          <audio
+            ref={referenceRef}
+            src={audioUrl}
+            preload="auto"
+            onEnded={stopReference}
+            onError={() => {
+              setClipFailed(true)
+              setReferencePlaying(false)
+            }}
+          />
         </div>
 
         <LyricSyllables
@@ -1296,6 +1365,7 @@ export default function App() {
           <SingScreen
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
+            audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
             playerLabel={displayName(state, player)}
