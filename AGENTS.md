@@ -7,8 +7,9 @@ Frontend is React 19 + TypeScript + Vite 8 + Tailwind CSS v4 at the repo root. B
 ## Product shape
 
 - **Two modes, same scoring and same Aux rules in both.** Aux is the on-screen announcer (ElevenLabs voice over a Gemini-written line).
-  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. Three lines, then an average at the end.
-  - **Battle:** two players, one device, best of three. Players alternate turns; Aux calls each round.
+  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. **One line**, then the final screen.
+  - **Battle:** two players, one device, **one round**: each player sings the line once and the higher Tune score wins (a tie replays the round). Aux calls the result.
+  - Round count is `ROUNDS_PER_MATCH` in `src/domain/match.ts` (currently 1; songs carry three lines, so it can go back up to 3 for best of three).
 - **One song to start: Happy Birthday**, in English, Korean, and Arabic (Modern Standard). Lyrics are hard-coded, not scraped.
 - **Target notes are typed by hand as semitones.** Do not measure pitch from audio files. There are no "vocals-only" tracks for analysis.
 - **Two scores, always shown separately.**

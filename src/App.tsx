@@ -21,6 +21,7 @@ import {
   type GameMode,
   type MatchState,
   type PlayerIndex,
+  type RoundNumber,
 } from "@/domain/match"
 import { buildRoundResultPayload } from "@/domain/announcer"
 import { syllableDisplayTexts } from "@/domain/lyrics"
@@ -423,37 +424,46 @@ function PitchLane({
 
 function ScreenHeader({
   round,
+  rounds,
   playerLabel,
   playerColor,
   onHome,
 }: {
-  round: 1 | 2 | 3
+  round: RoundNumber
+  rounds: RoundNumber
   playerLabel?: string
   playerColor?: string
   onHome: () => void
 }) {
+  const multiRound = rounds > 1
+  const player = playerLabel ? (
+    <b style={{ color: playerColor, fontWeight: 800 }}>{playerLabel}</b>
+  ) : null
   return (
     <header className="screen-header">
       <Brand onHome={onHome} />
-      <div className="line-progress">
-        <span>
-          Round {round} <i>of</i> 3
-          {playerLabel ? (
-            <>
-              {" "}
-              ·{" "}
-              <b style={{ color: playerColor, fontWeight: 800 }}>
-                {playerLabel}
-              </b>
-            </>
-          ) : null}
-        </span>
-        <div className="progress-dots" aria-label={`Round ${round} of 3`}>
-          {[1, 2, 3].map((item) => (
-            <i className={item === round ? "active" : ""} key={item} />
-          ))}
+      {multiRound ? (
+        <div className="line-progress">
+          <span>
+            Round {round} <i>of</i> {rounds}
+            {player && <> · {player}</>}
+          </span>
+          <div
+            className="progress-dots"
+            aria-label={`Round ${round} of ${rounds}`}
+          >
+            {Array.from({ length: rounds }, (_, i) => i + 1).map((item) => (
+              <i className={item === round ? "active" : ""} key={item} />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        player && (
+          <div className="line-progress">
+            <span>{player}</span>
+          </div>
+        )
+      )}
     </header>
   )
 }
@@ -468,12 +478,12 @@ const MODE_OPTIONS: ModeOption[] = [
   {
     mode: "solo",
     title: "Solo",
-    body: "Sing three lines on your own. Get a Tune score and the syllables to fix after each one.",
+    body: "Sing a line on your own. Get a Tune score and the syllables to fix.",
   },
   {
     mode: "battle",
     title: "Battle",
-    body: "Two players, one device. Take turns singing each line. Best of three wins.",
+    body: "Two players, one device. Take turns singing the line. Higher Tune score wins.",
   },
 ]
 
@@ -601,6 +611,7 @@ function SingScreen({
   audioUrl,
   language,
   round,
+  rounds,
   playerLabel,
   playerColor,
   getSession,
@@ -610,7 +621,8 @@ function SingScreen({
   line: PracticeLine
   audioUrl: string
   language: Language
-  round: 1 | 2 | 3
+  round: RoundNumber
+  rounds: RoundNumber
   playerLabel: string
   playerColor: string
   getSession: () => Promise<AudioSession>
@@ -853,6 +865,7 @@ function SingScreen({
       <CornerDots />
       <ScreenHeader
         round={round}
+        rounds={rounds}
         playerLabel={playerLabel}
         playerColor={playerColor}
         onHome={onHome}
@@ -1112,7 +1125,7 @@ function RoundResultScreen({
   return (
     <main className="screen result-screen">
       <CornerDots />
-      <ScreenHeader round={state.round} onHome={onHome} />
+      <ScreenHeader round={state.round} rounds={state.rounds} onHome={onHome} />
 
       <section className="result-content">
         <div className={`dual-scores ${solo ? "single" : ""}`}>
@@ -1228,7 +1241,7 @@ function RoundResultScreen({
           </div>
         ))}
 
-        {!solo && (
+        {!solo && state.rounds > 1 && (
           <div className="scoreboard-row">
             <span style={{ color: PLAYER_COLORS[0] }}>
               {displayName(state, 0)}
@@ -1387,6 +1400,7 @@ export default function App() {
             audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
+            rounds={state.rounds}
             playerLabel={displayName(state, player)}
             playerColor={PLAYER_COLORS[player]}
             getSession={getSession}
