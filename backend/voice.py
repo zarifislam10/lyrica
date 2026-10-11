@@ -174,7 +174,11 @@ async def clone_voice(sample: UploadFile = File(...)) -> dict[str, str]:
                 headers={"xi-api-key": _api_key()},
                 data={
                     "name": voice_label,
-                    "description": "Lyrica temporary clone — auto-deleted.",
+                    "description": "Lyrica temporary clone, auto-deleted.",
+                    # Let ElevenLabs clean the mic sample before fingerprinting.
+                    # Browser recordings carry room noise that otherwise bleeds
+                    # into the clone and makes it sound less like the speaker.
+                    "remove_background_noise": "true",
                 },
                 files={"files": (filename, data, content_type)},
             )
@@ -253,6 +257,17 @@ async def say_line(
                     # Multilingual models infer language from text, but passing
                     # language_code when known helps non-Latin scripts.
                     "language_code": language,
+                    # Push every lever toward "sounds like the speaker":
+                    # - low stability lets inflection through
+                    # - high similarity_boost biases toward the source clone
+                    # - style keeps a little expressiveness
+                    # - speaker_boost is ElevenLabs' extra similarity pass
+                    "voice_settings": {
+                        "stability": 0.35,
+                        "similarity_boost": 0.95,
+                        "style": 0.3,
+                        "use_speaker_boost": True,
+                    },
                 },
             )
     except httpx.HTTPError:

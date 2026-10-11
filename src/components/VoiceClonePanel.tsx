@@ -19,14 +19,19 @@ import type { PracticeLine } from "@/domain/types"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
 import { cloneVoice, sayLine, VoiceCloneError } from "@/services/voiceClone"
 
-const RECORD_SECONDS = 15
-// A short neutral prompt. Content doesn't matter for the clone — only the
-// sound does — but a prompt stops the recorder from capturing silence.
+// 30s is the sweet spot for ElevenLabs IVC: short enough that people will
+// actually read it, long enough that the clone has real phonetic variety to
+// generalize from. 15s samples came out too generic.
+const RECORD_SECONDS = 30
+// Phonetically varied prompts. The more different sounds the clone hears,
+// the closer the playback will feel. The sentences are built to cover a
+// wide range of vowels and consonants without being hard to read.
 const PROMPT_EN =
-  "I like learning new songs. It helps me say new words and sounds."
+  "I like learning new songs. It helps me say new words and sounds. The quick brown fox jumps over the lazy dog. I'm practicing my pronunciation, and every take feels a little better than the last."
 const PROMPT_KO =
-  "저는 새로운 노래를 배우는 것을 좋아합니다. 매일 조금씩 연습해요."
-const PROMPT_AR = "أحبّ تعلم أغانٍ جديدة، وأتدرّب قليلاً كل يوم."
+  "저는 새로운 노래를 배우는 것을 좋아합니다. 매일 조금씩 연습해요. 오늘도 제 목소리로 또박또박 읽어 봅니다."
+const PROMPT_AR =
+  "أحبّ تعلم أغانٍ جديدة، وأتدرّب قليلاً كل يوم. أقرأ هذه الجملة بصوتٍ واضح وطبيعي حتى يسمعني الحاسوب جيداً."
 
 function promptFor(language: string): string {
   if (language.startsWith("ko")) return PROMPT_KO
@@ -237,7 +242,7 @@ export default function VoiceClonePanel({
         code === "unsupported"
           ? "Voice cloning isn't available right now."
           : code === "too-large"
-            ? "That sample was too long — try a shorter take."
+            ? "That sample was too long. Try a shorter take."
             : "Could not create the voice copy. Please try again.",
       )
       setPhase("error")
@@ -344,7 +349,7 @@ export default function VoiceClonePanel({
   if (phase === "recording") {
     return (
       <div className="voice-clone-panel voice-clone-cta voice-clone-recording">
-        <h4 className="voice-clone-title">Recording — read this out loud</h4>
+        <h4 className="voice-clone-title">Recording. Read this out loud</h4>
         <blockquote className="voice-clone-prompt">
           {promptFor(language)}
         </blockquote>
@@ -404,7 +409,9 @@ export default function VoiceClonePanel({
       >
         {buttonLabel}
       </button>
-      <small className="voice-clone-note">AI copy, spoken — not sung.</small>
+      <small className="voice-clone-note">
+        AI copy of your voice, spoken not sung. Approximate.
+      </small>
       {error && <p className="voice-clone-inline-error">{error}</p>}
     </div>
   )
