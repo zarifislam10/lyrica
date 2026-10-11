@@ -676,7 +676,13 @@ button:focus-visible {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-.hear-button:hover,
+.hear-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  transform: none;
+}
+
+.hear-button:not(:disabled):hover,
 .hear-button.playing {
   border-color: #19b5ff;
   color: #fff;
