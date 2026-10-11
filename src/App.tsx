@@ -245,6 +245,8 @@ function LyricSyllables({
     <div
       className="lyric-grid"
       lang={language}
+      // Arabic reads right to left here; the pitch lane stays left to right
+      // as a timeline. Agreed with the team, not an oversight.
       dir={language === "ar" ? "rtl" : "ltr"}
       style={{ "--syllable-count": line.syllables.length } as CSSProperties}
     >
