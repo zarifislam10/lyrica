@@ -4,6 +4,7 @@ import {
   displayName,
   soloTotal,
 } from "@/domain/match"
+import SongTag from "@/screens/SongTag"
 import WordsComingSoon from "@/screens/WordsComingSoon"
 
 function SoloFinal({ state }: { state: MatchState }) {
@@ -65,6 +66,7 @@ export default function FinalScreen({
   return (
     <main className="screen final-screen">
       <section className="final-content">
+        <SongTag song={state.song} />
         {solo ? <SoloFinal state={state} /> : <BattleFinal state={state} />}
         <div className="final-actions">
           <button className="primary-button" type="button" onClick={onRematch}>

@@ -81,7 +81,8 @@ Canonical layout. Start with task-relevant files; follow imports only when neces
 - `backend/main.py` — FastAPI app; CORS and welcome endpoint; mounts routers.
 - `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS with a shared 5s deadline and deterministic fallback.
 - `backend/test_round_result.py` — unittest suite; mocks all provider calls.
-- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
+- `backend/generate_hear_it.py` — offline script: ElevenLabs TTS speaks each song's line from `src/data/songs.ts` into `public/songs/<song id>.mp3` for "Hear it". Never called by the server. Tests in `backend/test_generate_hear_it.py` use a fake client.
+- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
 
 **ML (experimental)**
 - `ml/sound_match_test.py` — frozen wav2vec2-xls-r-300m + DTW cosine similarity probe. See `ml/README.md`. Does not touch `src/` or `backend/`.
@@ -144,9 +145,10 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 - FastAPI backend scaffold + `POST /round-result` (Gemini + ElevenLabs, 5s deadline, deterministic fallback).
 - One-device battle loop (`src/domain/match.ts`, `src/screens/`, `src/services/audioSession.ts`) — PR #5.
 - Solo mode + mode picker (`mode` field on match state, `GO_MODE` / `CHOOSE_MODE` actions, solo result screen) — PR #12.
+- Happy Birthday in English, Korean, and Arabic (`src/data/songs.ts`, melody typed once as semitones) + song picker. Flow is home → mode → song → setup; `state.song` holds the choice and `lineForRound(state)` reads its lines. `src/data/lines.ts` is a fixture for `scoring.test.ts` only — PR #18.
 
 **In flight:**
-- `laiba-songs`: the app sings `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, melody typed once as semitones. Flow is home → mode → song picker → setup; `state.song` holds the choice and `lineForRound(state)` reads its lines. `src/data/lines.ts` is now a fixture for `scoring.test.ts` only. Not yet done: ElevenLabs "Hear it" clips.
+- `laiba-hear-it`: `backend/generate_hear_it.py` renders the "Hear it" clips with ElevenLabs TTS; clips for all three songs are in `public/songs/`. Korean pronunciation still needs a native speaker's ear.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
 
 ## Current task owners
@@ -168,7 +170,7 @@ Prioritized. Work each on its own branch off latest `main`. Open one PR per item
    - Abort on unmount, on round change, and on `GO_HOME`. Ignore stale responses. Pause old audio before starting new.
    - Add a dev-only toggle (`import.meta.env.DEV`) to force the fallback path for testing.
 3. **Wire the "Hear it" button on the sing screen.**
-   - Blocked until `laiba-songs` lands, since it needs `audioUrl` + `audioStart`/`audioEnd` on each `PracticeLine`.
+   - `laiba-songs` has landed: play `state.song.audioUrl`. The mp3s come from `backend/generate_hear_it.py` (`laiba-hear-it`); until they're committed the file 404s, so handle a failed load by disabling the button.
    - Use a plain `<audio>` ref. If the line has `audioStart`/`audioEnd`, seek to `audioStart`, play, pause at `audioEnd`; otherwise play the whole clip (Happy Birthday clips speak one line).
    - Pause and reset on record start.
 4. **UI slot for the Words score.** Reserve the layout slot now, but render only "Words — coming soon" (no number) until the `ml/` probe PASSes. Do **not** compute, fake, or stub a Words number.

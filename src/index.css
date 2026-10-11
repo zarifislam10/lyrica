@@ -676,7 +676,13 @@ button:focus-visible {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-.hear-button:hover,
+.hear-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  transform: none;
+}
+
+.hear-button:not(:disabled):hover,
 .hear-button.playing {
   border-color: #19b5ff;
   color: #fff;
@@ -1333,6 +1339,78 @@ button:focus-visible {
   margin-left: 8px;
 }
 
+.leave-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(11 7 16 / 0.72);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: leave-overlay-in 140ms ease-out;
+}
+
+.leave-dialog {
+  width: min(100%, 420px);
+  padding: 28px 28px 22px;
+  border: 1px solid rgb(255 79 163 / 0.4);
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(180deg, #1a0f22 0%, #140b1c 100%);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+  animation: leave-dialog-in 180ms ease-out;
+}
+
+.leave-dialog h2 {
+  margin: 0 0 10px;
+  font-family: "Syne", sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.leave-dialog p {
+  margin: 0 0 22px;
+  color: #c4b5c9;
+  font-size: 14px;
+}
+
+.leave-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.leave-actions button {
+  min-width: 96px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+@keyframes leave-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes leave-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leave-overlay,
+  .leave-dialog {
+    animation: none;
+  }
+}
+
 @keyframes countPop {
   0% { opacity: 0; transform: scale(0.7); }
   35% { opacity: 1; transform: scale(1.05); }
@@ -1896,6 +1974,25 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.announcer-error {
+  display: grid;
+  gap: 6px;
+  max-width: 46ch;
+  padding: 10px 14px;
+  border: 1px solid #ff9a3d;
+  color: #ffd9b8;
+  background: rgb(255 154 61 / 0.1);
+  font-size: 12px;
+  text-align: left;
+}
+
+.announcer-error ul {
+  margin: 0;
+  padding-left: 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
 .announcer-play {
   display: inline-flex;
   align-items: center;
@@ -2093,8 +2190,34 @@ button:focus-visible {
   }
 }
 
+.song-tag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.song-tag .song-tag-title {
+  color: #fff8ff;
+  font-size: 18px;
+  text-transform: none;
+}
+
+.song-tag-title {
+  font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
 /* Arabic letters must stay connected: negative tracking splits them. */
 .lyric-grid:lang(ar) .syllable .hangul,
+.song-tag-title:lang(ar),
 .mode-card .song-title:lang(ar) {
   font-family: "Noto Sans Arabic", sans-serif;
   letter-spacing: normal;
@@ -2105,8 +2228,4 @@ button:focus-visible {
   font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
   font-size: 22px;
   font-weight: 700;
-}
-
-.mode-card.selected {
-  border-color: #ff4fa3;
 }

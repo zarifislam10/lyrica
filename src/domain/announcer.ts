@@ -16,6 +16,30 @@ export type RoundResultPayload = {
 
 const PLAYER_IDS = ["p1", "p2"] as const
 
+const MAX_REJECTION_REASONS = 3
+
+type ValidationIssue = {
+  loc?: unknown
+  msg?: unknown
+}
+
+/**
+ * Turns a FastAPI 422 body into short "field: problem" lines, e.g.
+ * "players.0.name: String should have at least 1 character".
+ */
+export function describeRejection(body: unknown): string[] {
+  const detail = (body as { detail?: unknown } | null)?.detail
+  if (!Array.isArray(detail)) return []
+  return detail.slice(0, MAX_REJECTION_REASONS).map((item) => {
+    const { loc, msg } = (item ?? {}) as ValidationIssue
+    const field = Array.isArray(loc)
+      ? loc.filter((part) => part !== "body").join(".")
+      : ""
+    const problem = typeof msg === "string" ? msg : "invalid"
+    return field ? `${field}: ${problem}` : problem
+  })
+}
+
 /** Builds the body for `POST /round-result` from a finished round. */
 export function buildRoundResultPayload(state: MatchState): RoundResultPayload {
   const line = lineForRound(state)
