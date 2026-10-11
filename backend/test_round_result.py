@@ -34,7 +34,7 @@ class RoundResultTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {
             "GEMINI_API_KEY": "test-gemini", "ELEVENLABS_API_KEY": "test-eleven",
             "GEMINI_MODEL": "test-model", "ELEVENLABS_VOICE_ID": "test-voice",
-            "ELEVENLABS_ROUND_MODEL_ID": "test-tts",
+            "ELEVENLABS_ANNOUNCER_VOICE_ID": "", "ELEVENLABS_ROUND_MODEL_ID": "test-tts",
         })
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -67,14 +67,32 @@ class RoundResultTests(unittest.TestCase):
                 self.assertEqual(json.loads(body["contents"][0]["parts"][0]["text"]), REQUEST)
                 return httpx.Response(200, json=GEMINI)
             self.assertEqual(request.headers["xi-api-key"], "test-eleven")
-            self.assertEqual(body["text"], "Laiba wins round 1! Great effort from both singers!")
+            self.assertEqual(request.url.path,
+                             f"/v1/text-to-speech/{round_result.ANNOUNCER_VOICE_ID}")
+            self.assertEqual(
+                body["text"],
+                round_result.ANNOUNCER_SPEECH_TAGS
+                + "Laiba wins round 1! Great effort from both singers!",
+            )
             self.assertEqual(body["model_id"], "test-tts")
+            self.assertEqual(body["voice_settings"], round_result.ANNOUNCER_VOICE_SETTINGS)
             return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
         response = self.call(handler)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["fallback"])
         self.assertEqual(base64.b64decode(response.json()["audioUrl"].split(",")[1]), b"fake-mp3")
         self.assertEqual(len(calls), 2)
+
+    def test_announcer_voice_can_be_overridden_without_touching_hear_it_voice(self):
+        paths = []
+        def handler(request):
+            if "generativelanguage" in request.url.host:
+                return httpx.Response(200, json=GEMINI)
+            paths.append(request.url.path)
+            return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
+        with patch.dict(os.environ, {"ELEVENLABS_ANNOUNCER_VOICE_ID": "aux-voice"}):
+            self.assertFalse(self.call(handler).json()["fallback"])
+        self.assertEqual(paths, ["/v1/text-to-speech/aux-voice"])
 
     def coaching_request(self):
         request = copy.deepcopy(REQUEST)
