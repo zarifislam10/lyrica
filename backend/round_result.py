@@ -188,7 +188,17 @@ async def coaching_or_nothing(client: httpx.AsyncClient, result: RoundResultRequ
         return {}
 
 
-ANNOUNCER_VOICE_ID = "cgSgspJ2msm6clMCkdW9"  # ElevenLabs "Jessica": young, bright, playful
+# Gigi on eleven_v3: high, bubbly, enthusiastic. Stability is low and
+# style/speed are up so she sounds motivated, not like a calm read.
+ANNOUNCER_VOICE_ID = "jBpfuIE2acCO8z3wKNLl"
+ANNOUNCER_MODEL_ID = "eleven_v3"
+ANNOUNCER_VOICE_SETTINGS = {
+    "stability": 0.22,
+    "similarity_boost": 0.72,
+    "style": 0.9,
+    "use_speaker_boost": True,
+    "speed": 1.12,
+}
 
 
 async def generate_audio(client: httpx.AsyncClient, commentary: str, api_key: str) -> str:
@@ -201,7 +211,8 @@ async def generate_audio(client: httpx.AsyncClient, commentary: str, api_key: st
         params={"output_format": "mp3_44100_128"},
         headers={"xi-api-key": api_key, "Accept": "audio/mpeg"},
         json={"text": commentary,
-              "model_id": os.getenv("ELEVENLABS_ROUND_MODEL_ID", "eleven_flash_v2_5")},
+              "model_id": os.getenv("ELEVENLABS_ROUND_MODEL_ID", ANNOUNCER_MODEL_ID),
+              "voice_settings": ANNOUNCER_VOICE_SETTINGS},
     )
     response.raise_for_status()
     if not response.content or len(response.content) > 2_000_000:

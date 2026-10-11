@@ -82,7 +82,7 @@ Canonical layout. Start with task-relevant files; follow imports only when neces
 - `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS, plus Gemini coaching tips run in parallel, with a shared 5s deadline and deterministic fallback.
 - `backend/test_round_result.py` — unittest suite; mocks all provider calls.
 - `backend/generate_hear_it.py` — offline script: ElevenLabs TTS speaks each song's line from `src/data/songs.ts` into `public/songs/<song id>.mp3` for "Hear it". Never called by the server. Tests in `backend/test_generate_hear_it.py` use a fake client.
-- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_ANNOUNCER_VOICE_ID` (Aux's voice; defaults to Jessica), `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
+- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_ANNOUNCER_VOICE_ID` (Aux's voice; defaults to Gigi), `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
 
 **ML (experimental)**
 - `ml/sound_match_test.py` — frozen wav2vec2-xls-r-300m + DTW cosine similarity probe. See `ml/README.md`. Does not touch `src/` or `backend/`.
