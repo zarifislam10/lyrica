@@ -2419,6 +2419,98 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+/* Voice clone panel (stretch): per-player on the result screen. */
+.voice-clone-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed #4a2f52;
+  border-radius: 10px;
+  background: #19101e;
+  color: #fff8ff;
+  font-size: 13px;
+}
+
+.voice-clone-panel p,
+.voice-clone-panel ul,
+.voice-clone-panel blockquote {
+  margin: 0;
+}
+
+.voice-clone-panel ul {
+  padding-left: 18px;
+  color: #c4b5c9;
+}
+
+.voice-clone-note {
+  color: #c4b5c9;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+
+.voice-clone-prompt {
+  padding: 8px 10px;
+  border-left: 3px solid var(--player, #ff4fa3);
+  background: #221728;
+  border-radius: 6px;
+  color: #ffe4f1;
+  font-style: italic;
+}
+
+.voice-clone-consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #e2d2e7;
+}
+
+.voice-clone-consent-check input {
+  margin-top: 3px;
+}
+
+.voice-clone-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voice-clone-button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #6b3f78;
+  background: #2a1a32;
+  color: #fff8ff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.voice-clone-button.primary {
+  background: var(--player, #ff4fa3);
+  border-color: transparent;
+  color: #140b18;
+}
+
+.voice-clone-button.ghost {
+  background: transparent;
+}
+
+.voice-clone-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-clone-countdown {
+  color: #ffd1e6;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.voice-clone-error p,
+.voice-clone-inline-error {
+  color: #ff9fbf;
+}
+
 /* Leaderboard opt-in: unobtrusive checkbox on SetupScreen (battle only). */
 .share-leaderboard {
   display: flex;
