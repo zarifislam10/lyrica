@@ -12,11 +12,25 @@ type Phase = "pending" | "tune" | "words"
 const DEMO_WORDS_SCORES = [62, 68, 74, 81, 87]
 // Threshold for "Aux heard the words." vs the retry line.
 const HEARD_WORDS_THRESHOLD = 50
+// Loading sentences that rotate while the fake scoring is "running".
+// Add/remove lines to change the variety.
+const LOADING_MESSAGES = [
+  "Listening…",
+  "Checking your syllables…",
+  "Comparing to a native speaker…",
+  "Scoring your pronunciation…",
+  "Lining up every word…",
+  "Catching your diction…",
+]
 
 function pickDemoResult(): WordsResult {
   const words =
     DEMO_WORDS_SCORES[Math.floor(Math.random() * DEMO_WORDS_SCORES.length)]
   return { words, heardWords: words >= HEARD_WORDS_THRESHOLD }
+}
+
+function pickLoadingMessage(): string {
+  return LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]
 }
 
 // Two side-by-side bars + a verdict + a small source line, animating in
@@ -36,6 +50,7 @@ export default function WordsCard({
   const [status, setStatus] = useState<Status>("loading")
   const [result, setResult] = useState<WordsResult | null>(null)
   const [phase, setPhase] = useState<Phase>("pending")
+  const [loadingMessage, setLoadingMessage] = useState(pickLoadingMessage)
 
   // One-shot: swap pending → tune → words so the cards animate in order.
   useEffect(() => {
@@ -62,6 +77,7 @@ export default function WordsCard({
   useEffect(() => {
     let cancelled = false
     setStatus("loading")
+    setLoadingMessage(pickLoadingMessage())
     const timer = window.setTimeout(() => {
       if (cancelled) return
       setResult(pickDemoResult())
@@ -104,7 +120,7 @@ export default function WordsCard({
           {showWordsNumber ? (
             <strong>{result.words}</strong>
           ) : status === "loading" ? (
-            <span className="words-bar-pending">Listening…</span>
+            <span className="words-bar-pending">{loadingMessage}</span>
           ) : (
             <span className="words-bar-pending">Unavailable</span>
           )}
