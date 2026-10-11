@@ -52,7 +52,7 @@ class RoundResultTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
             "commentary": "Laiba wins round 1! Great effort from both players.",
-            "audioUrl": None, "fallback": True,
+            "audioUrl": None, "fallback": True, "coaching": {},
         })
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertNotIn("test-gemini", response.text)
@@ -88,6 +88,67 @@ class RoundResultTests(unittest.TestCase):
         with patch.dict(os.environ, {"ELEVENLABS_ANNOUNCER_VOICE_ID": "aux-voice"}):
             self.assertFalse(self.call(handler).json()["fallback"])
         self.assertEqual(paths, ["/v1/text-to-speech/aux-voice"])
+
+    def coaching_request(self):
+        request = copy.deepcopy(REQUEST)
+        request["language"] = "ko"
+        request["players"][1]["missedDetails"] = [{"text": "녕", "romanization": "nyeong"}]
+        return request
+
+    def coaching_handler(self, coaching_response, calls=None):
+        def handler(request):
+            body = json.loads(request.content)
+            if calls is not None:
+                calls.append(body)
+            if request.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
+            if "responseSchema" in body["generationConfig"]:
+                return coaching_response
+            return httpx.Response(200, json=GEMINI)
+        return handler
+
+    @staticmethod
+    def gemini_json(payload):
+        return httpx.Response(200, json={"candidates": [{"finishReason": "STOP", "content": {
+            "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}}]})
+
+    def test_coaching_words_a_tip_from_the_missed_syllables_we_send(self):
+        calls = []
+        tips = {"tips": [{"playerId": "p2", "tip": "Say nyeong slowly three times, then tap Hear it."}]}
+        response = self.call(self.coaching_handler(self.gemini_json(tips), calls), self.coaching_request())
+        self.assertFalse(response.json()["fallback"])
+        self.assertEqual(response.json()["coaching"],
+                         {"p2": "Say nyeong slowly three times, then tap Hear it."})
+        coach = next(c for c in calls if "responseSchema" in c.get("generationConfig", {}))
+        facts = json.loads(coach["contents"][0]["parts"][0]["text"])
+        self.assertEqual(facts, {"language": "Korean", "players": [
+            {"playerId": "p2", "missed": [{"text": "녕", "romanization": "nyeong"}]}]})
+        announcer = next(c for c in calls if "contents" in c and "responseSchema" not in c["generationConfig"])
+        self.assertNotIn("missedDetails", announcer["contents"][0]["parts"][0]["text"])
+
+    def test_coaching_drops_tips_for_unknown_players_or_too_long(self):
+        tips = {"tips": [{"playerId": "p1", "tip": "p1 missed nothing"},
+                         {"playerId": "p2", "tip": "word " * 30}]}
+        response = self.call(self.coaching_handler(self.gemini_json(tips)), self.coaching_request())
+        self.assertFalse(response.json()["fallback"])
+        self.assertEqual(response.json()["coaching"], {})
+
+    def test_coaching_failure_never_costs_the_announcer(self):
+        for bad in [httpx.Response(500, json={}), httpx.Response(200, json={}),
+                    self.gemini_json("not an object"),
+                    httpx.Response(200, json={"candidates": [{"finishReason": "STOP", "content": {
+                        "parts": [{"text": "not json"}]}}]})]:
+            with self.subTest(bad=bad):
+                response = self.call(self.coaching_handler(bad), self.coaching_request())
+                self.assertFalse(response.json()["fallback"])
+                self.assertEqual(response.json()["coaching"], {})
+
+    def test_unknown_language_is_rejected(self):
+        request = self.coaching_request()
+        request["language"] = "fr"
+        with patch.object(round_result, "generate_result") as generate:
+            self.assertEqual(self.client.post("/round-result", json=request).status_code, 422)
+            generate.assert_not_called()
 
     def test_missing_key_returns_immediate_fallback_without_network(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": ""}), patch.object(round_result, "generate_result") as generate:

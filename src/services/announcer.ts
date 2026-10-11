@@ -12,6 +12,8 @@ type LiveAnnouncement = {
   kind: "live"
   commentary: string
   audioUrl: string
+  // Player id -> Gemini's practice tip; empty when there's none.
+  coaching: Record<string, string>
 }
 
 type RejectedAnnouncement = {
@@ -41,6 +43,15 @@ export function setFallbackForced(forced: boolean) {
   } catch {
     // ignore private mode
   }
+}
+
+function readCoaching(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const tips: Record<string, string> = {}
+  for (const [playerId, tip] of Object.entries(value)) {
+    if (typeof tip === "string" && tip.trim()) tips[playerId] = tip.trim()
+  }
+  return tips
 }
 
 /**
@@ -78,6 +89,7 @@ export async function fetchAnnouncement(
       commentary?: unknown
       audioUrl?: unknown
       fallback?: unknown
+      coaching?: unknown
     }
     if (
       result.fallback ||
@@ -90,6 +102,7 @@ export async function fetchAnnouncement(
       kind: "live",
       commentary: result.commentary,
       audioUrl: result.audioUrl,
+      coaching: readCoaching(result.coaching),
     }
   } catch {
     return FALLBACK
