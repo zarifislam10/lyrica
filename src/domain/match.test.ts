@@ -6,6 +6,7 @@ import {
   createMatchState,
   displayName,
   lineForRound,
+  ROUNDS_PER_MATCH,
   matchReducer,
   normalizeName,
   soloTotal,
@@ -93,22 +94,24 @@ describe("matchReducer", () => {
     expect(tiedAgain.roundWins).toEqual([0, 0])
   })
 
-  it("alternates who sings first and skips round 3 at 2-0", () => {
-    let state = started()
-    for (let round = 0; round < 2; round += 1) {
-      expect(state.currentPlayer).toBe(round === 0 ? 0 : 1)
-      const avaFirst = state.currentPlayer === 0
-      state = playRound(
-        state,
-        turn(avaFirst ? 90 : 60),
-        turn(avaFirst ? 60 : 90),
-      )
-      expect(state.phase).toBe("roundResult")
-      state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    }
+  it("plays a single round for the demo", () => {
+    expect(ROUNDS_PER_MATCH).toBe(1)
+  })
+
+  it("ends the battle after one decided round", () => {
+    let state = playRound(started(), turn(60), turn(90))
+    expect(state.phase).toBe("roundResult")
+    expect(state.roundWinner).toBe(1)
+    state = matchReducer(state, { type: "ROUND_CONTINUE" })
     expect(state.phase).toBe("final")
-    expect(state.roundWins).toEqual([2, 0])
-    expect(state.round).toBe(2)
+    expect(state.round).toBe(1)
+    expect(state.roundWins).toEqual([0, 1])
+  })
+
+  it("still replays a tie instead of ending the one-round battle", () => {
+    const tied = playRound(started(), turn(80, 0.7), turn(80, 0.7))
+    expect(tied.phase).toBe("turnReady")
+    expect(tied.round).toBe(1)
   })
 
   it("rematch keeps names and swaps who sings first", () => {
@@ -180,14 +183,10 @@ describe("song selection", () => {
     ).toBe(choosing)
   })
 
-  it("sings the song's line for each round", () => {
-    let state = matchReducer(chosen(arabic.id), { type: "START_MATCH" })
+  it("sings the song's first line", () => {
+    const state = matchReducer(chosen(arabic.id), { type: "START_MATCH" })
     expect(state.song).toBe(arabic)
     expect(lineForRound(state)).toBe(arabic.lines[0])
-    state = playRound(state, turn(90), turn(40))
-    state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    expect(state.round).toBe(2)
-    expect(lineForRound(state)).toBe(arabic.lines[1])
   })
 
   it("keeps the song through a rematch and going home", () => {
@@ -211,17 +210,13 @@ describe("solo mode", () => {
     expect(afterTake.soloScores).toEqual([72])
   })
 
-  it("always plays all three lines, then averages the scores", () => {
-    let state = started("solo")
-    for (const score of [90, 60, 81]) {
-      expect(state.currentPlayer).toBe(0)
-      state = matchReducer(state, turn(score))
-      state = matchReducer(state, { type: "ROUND_CONTINUE" })
-    }
+  it("ends after one line with that line's score as the total", () => {
+    let state = matchReducer(started("solo"), turn(81))
+    state = matchReducer(state, { type: "ROUND_CONTINUE" })
     expect(state.phase).toBe("final")
-    expect(state.round).toBe(3)
-    expect(state.soloScores).toEqual([90, 60, 81])
-    expect(soloTotal(state)).toBe(77)
+    expect(state.round).toBe(1)
+    expect(state.soloScores).toEqual([81])
+    expect(soloTotal(state)).toBe(81)
   })
 
   it("sing again stays solo and clears the scores", () => {
