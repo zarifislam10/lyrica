@@ -35,6 +35,7 @@ import type { Language, PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
+import { LANGUAGE_NAMES } from "@/screens/SongTag"
 import WordsComingSoon from "@/screens/WordsComingSoon"
 import {
   createAudioContext,
@@ -542,18 +543,10 @@ function ModeScreen({
   )
 }
 
-const LANGUAGE_NAMES: Record<Language, string> = {
-  en: "English",
-  ko: "Korean",
-  ar: "Arabic",
-}
-
 function SongScreen({
-  selectedId,
   onChoose,
   onHome,
 }: {
-  selectedId: string
   onChoose: (songId: string) => void
   onHome: () => void
 }) {
@@ -568,12 +561,9 @@ function SongScreen({
         <div className="mode-options">
           {songs.map((song) => (
             <button
-              className={`mode-card ${
-                song.id === selectedId ? "selected" : ""
-              }`}
+              className="mode-card"
               type="button"
               key={song.id}
-              aria-pressed={song.id === selectedId}
               onClick={() => onChoose(song.id)}
             >
               <strong>{LANGUAGE_NAMES[song.language]}</strong>
@@ -642,6 +632,7 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 function SingScreen({
   line,
   nextLine,
+  audioUrl,
   language,
   round,
   playerLabel,
@@ -652,6 +643,7 @@ function SingScreen({
 }: {
   line: PracticeLine
   nextLine?: PracticeLine
+  audioUrl: string
   language: Language
   round: 1 | 2 | 3
   playerLabel: string
@@ -666,7 +658,9 @@ function SingScreen({
   const [liveSamples, setLiveSamples] = useState<PitchSample[]>([])
   const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
+  const [clipFailed, setClipFailed] = useState(false)
 
+  const referenceRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const detectorRef = useRef<ReturnType<typeof createPitchDetector> | null>(
     null,
@@ -689,6 +683,54 @@ function SingScreen({
 
   useEffect(() => cleanup, [])
 
+  const clipStart = line.audioStart ?? 0
+  const clipEnd = line.audioEnd
+
+  const stopReference = () => {
+    const audio = referenceRef.current
+    if (audio) {
+      audio.pause()
+      audio.currentTime = clipStart
+    }
+    setReferencePlaying(false)
+  }
+
+  const toggleReference = () => {
+    const audio = referenceRef.current
+    if (!audio || clipFailed) return
+    if (referencePlaying) {
+      stopReference()
+      return
+    }
+    audio.currentTime = clipStart
+    setReferencePlaying(true)
+    audio.play().catch((err: unknown) => {
+      setReferencePlaying(false)
+      if (err instanceof DOMException && err.name === "NotSupportedError") {
+        setClipFailed(true)
+      }
+    })
+  }
+
+  // timeupdate fires only ~4 times a second, which would bleed into the next
+  // line of the clip, so watch the end of the range every frame instead.
+  useEffect(() => {
+    if (!referencePlaying || clipEnd === undefined) return
+    let frame = 0
+    const watch = () => {
+      const audio = referenceRef.current
+      if (audio && audio.currentTime >= clipEnd) {
+        stopReference()
+        return
+      }
+      frame = requestAnimationFrame(watch)
+    }
+    frame = requestAnimationFrame(watch)
+    return () => cancelAnimationFrame(frame)
+  }, [referencePlaying, clipEnd])
+
+  useEffect(() => () => referenceRef.current?.pause(), [])
+
   useEffect(() => {
     const onHidden = () => {
       if (document.visibilityState !== "hidden") return
@@ -706,6 +748,7 @@ function SingScreen({
 
   const startRecording = async () => {
     if (singState !== "ready") return
+    stopReference()
     setError(null)
     setProgress(0)
     setLiveSamples([])
@@ -867,14 +910,30 @@ function SingScreen({
           </div>
           <button
             className={`hear-button ${referencePlaying ? "playing" : ""}`}
-            onClick={() => setReferencePlaying((playing) => !playing)}
+            onClick={toggleReference}
+            disabled={clipFailed || singState !== "ready"}
+            title={clipFailed ? "This line's audio isn't available" : undefined}
             aria-label={
-              referencePlaying ? "Pause reference line" : "Hear reference line"
+              clipFailed
+                ? "Reference line unavailable"
+                : referencePlaying
+                  ? "Stop reference line"
+                  : "Hear reference line"
             }
           >
             <SpeakerIcon />
             <span>{referencePlaying ? "Playing" : "Hear it"}</span>
           </button>
+          <audio
+            ref={referenceRef}
+            src={audioUrl}
+            preload="auto"
+            onEnded={stopReference}
+            onError={() => {
+              setClipFailed(true)
+              setReferencePlaying(false)
+            }}
+          />
         </div>
 
         <LyricSyllables
@@ -1041,7 +1100,7 @@ function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   }
 }
 
-type AnnouncerStatus = "loading" | "live" | "fallback"
+type AnnouncerStatus = "loading" | "live" | "fallback" | "rejected"
 
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
@@ -1052,6 +1111,7 @@ function useAnnouncement(state: MatchState) {
     enabled ? "loading" : "fallback",
   )
   const [commentary, setCommentary] = useState<string | null>(null)
+  const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
@@ -1064,7 +1124,12 @@ function useAnnouncement(state: MatchState) {
     const start = setTimeout(() => {
       void fetchAnnouncement(payload, controller.signal).then((result) => {
         if (controller.signal.aborted) return
-        if (!result) {
+        if (result.kind === "rejected") {
+          setRejectedReasons(result.reasons)
+          setStatus("rejected")
+          return
+        }
+        if (result.kind === "fallback") {
           setStatus("fallback")
           return
         }
@@ -1093,7 +1158,7 @@ function useAnnouncement(state: MatchState) {
       .catch(() => setNeedsTap(true))
   }
 
-  return { status, commentary, needsTap, playAudio }
+  return { status, commentary, rejectedReasons, needsTap, playAudio }
 }
 
 function RoundResultScreen({
@@ -1180,6 +1245,20 @@ function RoundResultScreen({
           </p>
           {announcer.status === "loading" && (
             <p className="announcer-status">Announcer is on the mic…</p>
+          )}
+          {announcer.status === "rejected" && (
+            <div className="announcer-error" role="alert">
+              <strong>
+                Announcer skipped: the backend rejected this round (422)
+              </strong>
+              {announcer.rejectedReasons.length > 0 && (
+                <ul>
+                  {announcer.rejectedReasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
           {announcer.needsTap && (
             <button
@@ -1268,6 +1347,7 @@ export default function App() {
     createMatchState(loadStoredNames()),
   )
   const sessionRef = useRef<AudioSession | null>(null)
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false)
 
   const inMatch =
     state.phase === "turnReady" ||
@@ -1291,12 +1371,21 @@ export default function App() {
   }
 
   const goHome = () => {
-    const leavePrompt =
-      state.mode === "solo" ? "Leave this session?" : "Leave this battle?"
-    if (inMatch && !window.confirm(leavePrompt)) return
+    if (inMatch) {
+      setLeavePromptOpen(true)
+      return
+    }
     closeSession()
     dispatch({ type: "GO_HOME" })
   }
+
+  const confirmLeave = () => {
+    setLeavePromptOpen(false)
+    closeSession()
+    dispatch({ type: "GO_HOME" })
+  }
+
+  const cancelLeave = () => setLeavePromptOpen(false)
 
   // Reuse the match's stream; only re-ask if the mic was unplugged or closed.
   const getSession = async (): Promise<AudioSession> => {
@@ -1340,7 +1429,6 @@ export default function App() {
         )}
         {state.phase === "song" && (
           <SongScreen
-            selectedId={state.song.id}
             onChoose={(songId) => dispatch({ type: "SELECT_SONG", songId })}
             onHome={goHome}
           />
@@ -1367,6 +1455,7 @@ export default function App() {
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
             nextLine={state.song.lines[state.round]}
+            audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
             playerLabel={displayName(state, player)}
@@ -1411,6 +1500,59 @@ export default function App() {
             }}
           />
         )}
+        {leavePromptOpen && (
+          <LeavePrompt
+            mode={state.mode}
+            onCancel={cancelLeave}
+            onConfirm={confirmLeave}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LeavePrompt({
+  mode,
+  onCancel,
+  onConfirm,
+}: {
+  mode: GameMode
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const session = mode === "solo" ? "session" : "battle"
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onCancel])
+  return (
+    <div
+      className="leave-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leave-title"
+      onClick={onCancel}
+    >
+      <div className="leave-dialog" onClick={(e) => e.stopPropagation()}>
+        <h2 id="leave-title">Leave this {session}?</h2>
+        <p>Your scores for this round will be lost.</p>
+        <div className="leave-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onCancel}
+            autoFocus
+          >
+            Stay
+          </button>
+          <button className="primary-button" type="button" onClick={onConfirm}>
+            Leave
+          </button>
+        </div>
       </div>
     </div>
   )
