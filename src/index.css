@@ -701,12 +701,33 @@ button:focus-visible {
   stroke-width: 1.4;
 }
 
+.guide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+  font-size: 13px;
+  color: #c9c9d1;
+  user-select: none;
+}
+.guide-toggle input {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+.guide-toggle input:disabled + span {
+  opacity: 0.5;
+}
+
 .lyric-grid {
+  --pad-x: 12px;
+  --gap: 5px;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--syllable-count, 5), minmax(0, 1fr));
-  gap: 5px;
+  gap: var(--gap);
   margin: 30px 0 14px;
-  padding: 17px 12px;
+  padding: 17px var(--pad-x);
   border: 1px solid #2b1f30;
   border-radius: 18px;
   background: #130e17;
@@ -752,6 +773,102 @@ button:focus-visible {
 
 .syllable.active .roman {
   color: #fff;
+}
+
+/* While singing, colour sweeps through each syllable as it's sung: sung
+   syllables stay lit in the player's colour, upcoming ones stay dim. */
+.lyric-grid.singing .syllable .hangul,
+.lyric-grid.singing .syllable .roman {
+  color: transparent;
+  background-image: linear-gradient(
+    to right,
+    var(--lit, #ff4fa3) var(--fill, 0%),
+    #5f4f66 var(--fill, 0%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.lyric-grid.singing[dir="rtl"] .syllable .hangul,
+.lyric-grid.singing[dir="rtl"] .syllable .roman {
+  background-image: linear-gradient(
+    to left,
+    var(--lit, #ff4fa3) var(--fill, 0%),
+    #5f4f66 var(--fill, 0%)
+  );
+}
+
+/* Bouncing ball: hops from syllable to syllable, landing on each one as it
+   starts. --slot is a fractional syllable index, --lift the hop height. */
+.lyric-grid.with-ball {
+  padding-top: 46px;
+}
+
+.lyric-ball {
+  --cell: calc(
+    (100% - 2 * var(--pad-x) - (var(--syllable-count) - 1) * var(--gap)) /
+      var(--syllable-count)
+  );
+  position: absolute;
+  top: 22px;
+  left: calc(
+    var(--pad-x) + var(--cell) / 2 + var(--slot, 0) * (var(--cell) + var(--gap))
+  );
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lit, #ff4fa3);
+  box-shadow: 0 0 14px var(--lit, #ff4fa3);
+  transform: translate(-50%, calc(var(--lift, 0) * -18px));
+  pointer-events: none;
+}
+
+.lyric-grid[dir="rtl"] .lyric-ball {
+  right: calc(
+    var(--pad-x) + var(--cell) / 2 + var(--slot, 0) * (var(--cell) + var(--gap))
+  );
+  left: auto;
+  transform: translate(50%, calc(var(--lift, 0) * -18px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyric-ball {
+    transform: translate(-50%, 0);
+  }
+
+  .lyric-grid[dir="rtl"] .lyric-ball {
+    transform: translate(50%, 0);
+  }
+}
+
+.next-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+  color: #9d8ca4;
+  text-align: center;
+}
+
+.next-line-label {
+  font-family: "Syne", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.next-line-text {
+  color: #c4b5c9;
+  font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.next-line-roman {
+  font-size: 13px;
 }
 
 .syllable.matched {
@@ -1044,7 +1161,23 @@ button:focus-visible {
   font-weight: 800;
   line-height: 1;
   letter-spacing: -10px;
-  animation: countPop 650ms ease both;
+  animation: countPop var(--beat, 650ms) ease both;
+}
+
+.count-beat {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.count-ring {
+  position: absolute;
+  width: clamp(170px, 26vw, 290px);
+  aspect-ratio: 1;
+  border: 2px solid #ff4fa3;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: beatRing var(--beat, 650ms) ease-out both;
 }
 
 .count-overlay small {
@@ -1350,6 +1483,11 @@ button:focus-visible {
   100% { opacity: 0.94; transform: scale(1); }
 }
 
+@keyframes beatRing {
+  0% { opacity: 0.9; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
 @keyframes pulse {
   50% { opacity: 0.35; transform: scale(0.7); }
 }
@@ -1457,7 +1595,12 @@ button:focus-visible {
   }
 
   .lyric-grid {
-    padding: 14px 5px;
+    --pad-x: 5px;
+    padding: 14px var(--pad-x);
+  }
+
+  .lyric-grid.with-ball {
+    padding-top: 40px;
   }
 
   .syllable .hangul {
@@ -2070,6 +2213,104 @@ button:focus-visible {
   animation: pulse 1.8s ease-in-out infinite;
 }
 
+/* ---- Words card: two side-by-side bars (Tune, Words) + verdict + source. */
+.words-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.words-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.words-bar {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 6px;
+  background: rgb(11 7 16 / 0.55);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease-out,
+    transform 320ms ease-out;
+}
+
+.words-bar.enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.words-bar small {
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.words-bar strong {
+  margin: 0;
+  color: #fff;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(32px, 7vw, 52px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Tune number takes the player tint. Words stays neutral — it's a different
+   measurement and we don't want the colours to imply agreement. */
+.words-bar.tune strong {
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--player) 70%, transparent),
+    3px 3px 0 color-mix(in srgb, var(--player) 55%, transparent);
+}
+
+.words-bar.words strong {
+  color: #e8dcff;
+  text-shadow: 0 0 14px rgb(155 61 255 / 0.35);
+}
+
+.words-bar-caption {
+  color: #a69bb5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.words-bar-pending {
+  display: flex;
+  min-height: clamp(32px, 7vw, 52px);
+  align-items: center;
+  justify-content: center;
+  color: #d9c8ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.words-verdict {
+  margin: 0;
+  color: #e4d8ea;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.words-source {
+  margin: 0;
+  color: #8f8299;
+  font-size: 11px;
+  text-align: center;
+}
+
+.final-score-slots.words-card .words-bar strong,
+.words-card .words-bar strong {
+  font-size: clamp(32px, 7vw, 52px);
+}
+
 .final-score-slots {
   --player: #ff4fa3;
 }
@@ -2176,4 +2417,250 @@ button:focus-visible {
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
+}
+
+/* Voice clone panel (stretch): per-player on the result screen. The
+   player's accent colour is passed in via the --player CSS variable so
+   this panel reads as part of their score card. */
+.voice-clone-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--player, #ff4fa3) 32%, #140b18) 0%,
+    #1b1021 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent);
+  color: #fff8ff;
+  font-size: 14px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.voice-clone-panel::after {
+  /* Soft spotlight to make the card feel lit from behind the title. */
+  content: "";
+  position: absolute;
+  inset: -40% -40% auto auto;
+  width: 70%;
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.voice-clone-panel p,
+.voice-clone-panel ul,
+.voice-clone-panel blockquote {
+  margin: 0;
+}
+
+.voice-clone-panel ul {
+  padding-left: 20px;
+  color: #ead6ee;
+  line-height: 1.5;
+}
+
+.voice-clone-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-clone-tagline {
+  color: #ead6ee;
+  line-height: 1.4;
+}
+
+.voice-clone-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--player, #ff4fa3) 70%, #140b18);
+  color: #140b18;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.voice-clone-note {
+  color: #c4b5c9;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+
+.voice-clone-prompt {
+  padding: 10px 12px;
+  border-left: 3px solid var(--player, #ff4fa3);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  color: #ffe4f1;
+  font-style: italic;
+}
+
+.voice-clone-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.voice-clone-button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--player, #ff4fa3) 60%, transparent);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff8ff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.voice-clone-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.voice-clone-button.primary {
+  background: var(--player, #ff4fa3);
+  border-color: transparent;
+  color: #140b18;
+  box-shadow: 0 4px 14px
+    color-mix(in oklab, var(--player, #ff4fa3) 55%, transparent);
+}
+
+.voice-clone-button.big {
+  padding: 14px 20px;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+.voice-clone-button.ghost {
+  background: transparent;
+}
+
+.voice-clone-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.voice-clone-countdown {
+  color: #ffd1e6;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  font-size: 15px;
+}
+
+.voice-clone-error p,
+.voice-clone-inline-error {
+  color: #ff9fbf;
+}
+
+/* Leaderboard opt-in: unobtrusive checkbox on SetupScreen (battle only). */
+.share-leaderboard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: #c4b5c9;
+  cursor: pointer;
+}
+
+.share-leaderboard input {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff4fa3;
+  cursor: pointer;
+}
+
+/* Leaderboard panel on FinalScreen. Hidden entirely when there's no data. */
+.leaderboard-panel {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #1d1422;
+  color: #fff8ff;
+  display: grid;
+  gap: 14px;
+}
+
+.leaderboard-panel header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #c4b5c9;
+}
+
+.leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  counter-reset: rank;
+}
+
+.leaderboard-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #241728;
+  counter-increment: rank;
+}
+
+.leaderboard-list li::before {
+  content: counter(rank) ".";
+  color: #c4b5c9;
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-list li b {
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-hardest small {
+  display: block;
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.leaderboard-hardest ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-hardest li {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #241728;
+  font-size: 13px;
 }

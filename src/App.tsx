@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from "react"
 
-import { songs } from "@/data/songs"
+import { SECONDS_PER_BEAT, songs } from "@/data/songs"
 import {
   PLAYER_COLORS,
   ROUNDS_PER_MATCH,
@@ -24,7 +24,12 @@ import {
   type PlayerIndex,
 } from "@/domain/match"
 import { PLAYER_IDS, buildRoundResultPayload } from "@/domain/announcer"
-import { syllableDisplayTexts } from "@/domain/lyrics"
+import {
+  bouncingBall,
+  syllableDisplayTexts,
+  syllableFill,
+  type BallPosition,
+} from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { Language, PitchSample, PracticeLine } from "@/domain/types"
@@ -32,19 +37,29 @@ import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
 import { LANGUAGE_NAMES } from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
+import WordsCard from "@/components/WordsCard"
+import VoiceClonePanel from "@/components/VoiceClonePanel"
+import { deleteVoice } from "@/services/voiceClone"
 import {
   createAudioContext,
   sessionFromMic,
   unlockAudio,
   type AudioSession,
 } from "@/services/audioSession"
+import { startWordsCapture, type WordsCapture } from "@/services/words"
 import {
   fetchAnnouncement,
   isFallbackForced,
   setFallbackForced,
 } from "@/services/announcer"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
+import {
+  playBeatTrack,
+  playCountIn,
+  playGuideWithBeat,
+  playLine as playMelodyLine,
+  stopAll as stopAllMelody,
+} from "@/services/melody"
 import { createPitchDetector } from "@/services/pitch"
 
 type SingState = "ready" | "starting" | "counting" | "recording"
@@ -52,7 +67,8 @@ type ErrorKind = "blocked" | "no-device" | "unclear" | "interrupted" | "generic"
 
 const DURATION = TURN_SECONDS
 const COUNT_IN_BEATS = 3
-const COUNT_IN_INTERVAL = 0.7
+// Same tempo as the melody, so the count-in sets the beat the line is sung on.
+const COUNT_IN_INTERVAL = SECONDS_PER_BEAT
 const COUNT_IN_SECONDS = COUNT_IN_BEATS * COUNT_IN_INTERVAL
 // Shared lane scale: 50% is the line's reference pitch, every semitone away
 // from it moves this many percent of lane height.
@@ -252,32 +268,52 @@ function LyricSyllables({
   activeIndex = -1,
   result = false,
   missed = [],
+  fill,
+  litColor,
+  ball,
 }: {
   line: PracticeLine
   language: Language
   activeIndex?: number
   result?: boolean
   missed?: number[]
+  fill?: number[]
+  litColor?: string
+  ball?: BallPosition
 }) {
   const texts = syllableDisplayTexts(line)
   return (
     <div
-      className="lyric-grid"
+      className={[
+        "lyric-grid",
+        fill ? "singing" : "",
+        ball ? "with-ball" : "",
+      ].join(" ")}
       lang={language}
       // Arabic reads right to left here; the pitch lane stays left to right
       // as a timeline. Agreed with the team, not an oversight.
       dir={language === "ar" ? "rtl" : "ltr"}
-      style={{ "--syllable-count": line.syllables.length } as CSSProperties}
+      style={
+        {
+          "--syllable-count": line.syllables.length,
+          "--lit": litColor,
+        } as CSSProperties
+      }
     >
       {line.syllables.map((syllable, index) => {
         const isMissed = missed.includes(index)
+        const sung = fill?.[index] ?? 0
         return (
           <div
             className={[
               "syllable",
               activeIndex === index ? "active" : "",
+              fill && sung >= 1 ? "sung" : "",
               result ? (isMissed ? "missed" : "matched") : "",
             ].join(" ")}
+            style={
+              fill ? { "--fill": `${sung * 100}%` } as CSSProperties : undefined
+            }
             key={`${line.id}-${index}`}
           >
             <span className="hangul">{texts[index]}</span>
@@ -287,6 +323,13 @@ function LyricSyllables({
           </div>
         )
       })}
+      {ball && (
+        <span
+          className="lyric-ball"
+          aria-hidden="true"
+          style={{ "--slot": ball.slot, "--lift": ball.lift } as CSSProperties}
+        />
+      )}
     </div>
   )
 }
@@ -605,6 +648,7 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 
 function SingScreen({
   line,
+  nextLine,
   audioUrl,
   language,
   round,
@@ -613,8 +657,10 @@ function SingScreen({
   getSession,
   onHome,
   onScored,
+  onBlob,
 }: {
   line: PracticeLine
+  nextLine?: PracticeLine
   audioUrl: string
   language: Language
   round: 1 | 2 | 3
@@ -623,6 +669,7 @@ function SingScreen({
   getSession: () => Promise<AudioSession>
   onHome: () => void
   onScored: (samples: PitchSample[]) => void
+  onBlob: (blob: Blob | null) => void
 }) {
   const [singState, setSingState] = useState<SingState>("ready")
   const [count, setCount] = useState(COUNT_IN_BEATS)
@@ -631,6 +678,10 @@ function SingScreen({
   const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
   const [clipFailed, setClipFailed] = useState(false)
+  // Opt-in: the mic hears the pitched melody and it corrupts both the Tune
+  // score and the Words model, so this is off by default and labelled
+  // headphones-only in the UI.
+  const [guideWhileSinging, setGuideWhileSinging] = useState(false)
 
   const referenceRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -643,6 +694,9 @@ function SingScreen({
   singStateRef.current = singState
   const onScoredRef = useRef(onScored)
   onScoredRef.current = onScored
+  const onBlobRef = useRef(onBlob)
+  onBlobRef.current = onBlob
+  const wordsCaptureRef = useRef<WordsCapture | null>(null)
 
   // Stops this take only; the match keeps the mic stream open.
   const cleanup = () => {
@@ -651,6 +705,9 @@ function SingScreen({
     detectorRef.current?.stop()
     detectorRef.current = null
     audioCtxRef.current = null
+    wordsCaptureRef.current?.dispose()
+    wordsCaptureRef.current = null
+    stopAllMelody()
   }
 
   useEffect(() => cleanup, [])
@@ -664,6 +721,7 @@ function SingScreen({
       audio.pause()
       audio.currentTime = clipStart
     }
+    stopAllMelody()
     setReferencePlaying(false)
   }
 
@@ -676,7 +734,10 @@ function SingScreen({
     }
     audio.currentTime = clipStart
     setReferencePlaying(true)
+    // Melody plays alongside the spoken clip so Hear it carries the tune too.
+    playMelodyLine(line)
     audio.play().catch((err: unknown) => {
+      stopAllMelody()
       setReferencePlaying(false)
       if (err instanceof DOMException && err.name === "NotSupportedError") {
         setClipFailed(true)
@@ -742,6 +803,10 @@ function SingScreen({
     const ctx = session.ctx
     audioCtxRef.current = ctx
 
+    // Record the turn's audio alongside pitch detection. Any failure is
+    // swallowed inside the service; the Words card falls back to "unavailable".
+    wordsCaptureRef.current = startWordsCapture(session.stream)
+
     const detector = createPitchDetector({
       ctx,
       stream: session.stream,
@@ -759,7 +824,13 @@ function SingScreen({
     setCount(COUNT_IN_BEATS)
     setSingState("counting")
 
+    // Pitched count-in gives the player the starting note and the tempo.
+    // Scheduled against melody's own ctx (relative to its own now), so a
+    // small clock-drift from the mic ctx doesn't matter here.
+    playCountIn(line, COUNT_IN_BEATS, COUNT_IN_INTERVAL)
+
     let hasStartedRecording = false
+    let beatsScheduled = false
 
     const loop = () => {
       const ctxNow = audioCtxRef.current
@@ -769,6 +840,16 @@ function SingScreen({
         const remaining = recordStart - now
         const nextCount = Math.max(1, Math.ceil(remaining / COUNT_IN_INTERVAL))
         setCount(nextCount)
+        if (!beatsScheduled && remaining < 0.08) {
+          // Schedule once right before record-start. Beat ticks only by
+          // default; pitched melody only if the player opted in.
+          beatsScheduled = true
+          if (guideWhileSinging) {
+            playGuideWithBeat(line, remaining, SECONDS_PER_BEAT)
+          } else {
+            playBeatTrack(line, remaining, SECONDS_PER_BEAT)
+          }
+        }
       } else {
         if (!hasStartedRecording) {
           hasStartedRecording = true
@@ -784,14 +865,28 @@ function SingScreen({
             finalSamples.length,
             detector.framesAnalyzed(),
           )
-          cleanup()
+          // Hand off the Words capture before cleanup() disposes it. The blob
+          // is awaited so the ref is populated before TURN_SCORED dispatches,
+          // guaranteeing the RoundResult screen sees it on first paint.
+          const capture = wordsCaptureRef.current
+          wordsCaptureRef.current = null
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = 0
+          detectorRef.current?.stop()
+          detectorRef.current = null
+          audioCtxRef.current = null
           if (unclear) {
+            capture?.dispose()
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
             setError("unclear")
           } else {
-            onScoredRef.current(finalSamples)
+            const settle = capture ? capture.stop() : Promise.resolve(null)
+            void settle.then((blob) => {
+              onBlobRef.current(blob)
+              onScoredRef.current(finalSamples)
+            })
           }
           return
         }
@@ -808,6 +903,15 @@ function SingScreen({
       (syllable) => time >= syllable.start && time <= syllable.end,
     )
   }, [line, progress, singState])
+
+  const fill =
+    singState === "recording"
+      ? syllableFill(line.syllables, progress * DURATION)
+      : undefined
+  const ball = bouncingBall(
+    line.syllables,
+    singState === "recording" ? progress * DURATION : 0,
+  )
 
   const errorTitle: Record<Exclude<ErrorKind, null>, string> = {
     blocked: "Mic access needed",
@@ -899,11 +1003,40 @@ function SingScreen({
           />
         </div>
 
+        <label className="guide-toggle">
+          <input
+            type="checkbox"
+            checked={guideWhileSinging}
+            onChange={(e) => setGuideWhileSinging(e.target.checked)}
+            disabled={singState !== "ready"}
+          />
+          <span>Guide melody while singing (headphones only)</span>
+        </label>
+
         <LyricSyllables
           line={line}
           language={language}
           activeIndex={activeIndex}
+          fill={fill}
+          litColor={playerColor}
+          ball={ball}
         />
+
+        {nextLine && (
+          <p className="next-line">
+            <span className="next-line-label">Next line</span>
+            <span
+              className="next-line-text"
+              lang={language}
+              dir={language === "ar" ? "rtl" : "ltr"}
+            >
+              {nextLine.text}
+            </span>
+            {nextLine.romanization && (
+              <span className="next-line-roman">{nextLine.romanization}</span>
+            )}
+          </p>
+        )}
 
         <PitchLane
           line={line}
@@ -1003,9 +1136,16 @@ function SingScreen({
       )}
 
       {singState === "counting" && (
-        <div className="count-overlay" aria-live="assertive">
-          <span key={count}>{count}</span>
-          <small>Get ready</small>
+        <div
+          className="count-overlay"
+          aria-live="assertive"
+          style={{ "--beat": `${COUNT_IN_INTERVAL}s` } as CSSProperties}
+        >
+          <div className="count-beat" key={count}>
+            <i className="count-ring" aria-hidden="true" />
+            <span>{count}</span>
+          </div>
+          <small>Start singing on the beat after 1</small>
         </div>
       )}
     </main>
@@ -1041,7 +1181,7 @@ type AnnouncerStatus = "loading" | "live" | "fallback" | "rejected"
 
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
-function useAnnouncement(state: MatchState) {
+function useAnnouncement(state: MatchState, shareOnLeaderboard: boolean) {
   // POST /round-result only accepts two players, so solo keeps the built-in line.
   const enabled = state.mode === "battle"
   const [status, setStatus] = useState<AnnouncerStatus>(
@@ -1052,7 +1192,13 @@ function useAnnouncement(state: MatchState) {
   const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
+  const payloadRef = useRef(
+    enabled
+      ? buildRoundResultPayload(state, {
+          optInToLeaderboard: shareOnLeaderboard,
+        })
+      : null,
+  )
 
   useEffect(() => {
     const payload = payloadRef.current
@@ -1102,17 +1248,25 @@ function useAnnouncement(state: MatchState) {
 
 function RoundResultScreen({
   state,
+  wordsBlobs,
+  shareOnLeaderboard,
+  voiceSessionIds,
+  onVoiceSessionCreated,
   onHome,
   onContinue,
 }: {
   state: MatchState
+  wordsBlobs: (Blob | null)[]
+  shareOnLeaderboard: boolean
+  voiceSessionIds: [string | null, string | null]
+  onVoiceSessionCreated: (player: PlayerIndex, sessionId: string) => void
   onHome: () => void
   onContinue: () => void
 }) {
   const line = lineForRound(state)
   const winner = state.roundWinner
   const matchOver = isMatchOver(state)
-  const announcer = useAnnouncement(state)
+  const announcer = useAnnouncement(state, shareOnLeaderboard)
   const [forceFallback, setForceFallback] = useState(isFallbackForced)
   const solo = state.mode === "solo"
   const players: PlayerIndex[] = solo ? [0] : [0, 1]
@@ -1148,13 +1302,12 @@ function RoundResultScreen({
                   />
                   {displayName(state, player)}
                 </span>
-                <div className="score-slots">
-                  <div className="score-slot">
-                    <small>Tune</small>
-                    <strong>{state.turnScores[player] ?? 0}</strong>
-                  </div>
-                  <WordsComingSoon />
-                </div>
+                <WordsCard
+                  tune={state.turnScores[player] ?? 0}
+                  wav={wordsBlobs[player] ?? null}
+                  songId={state.song.id}
+                  lineId={line.id}
+                />
                 <p>{coach.body}</p>
                 {announcer.coaching[PLAYER_IDS[player]] && (
                   <p className="coach-tip">
@@ -1162,6 +1315,13 @@ function RoundResultScreen({
                     {announcer.coaching[PLAYER_IDS[player]]}
                   </p>
                 )}
+                <VoiceClonePanel
+                  line={line}
+                  songId={state.song.id}
+                  language={state.song.language}
+                  sessionId={voiceSessionIds[player] ?? null}
+                  onSessionCreated={(id) => onVoiceSessionCreated(player, id)}
+                />
               </div>
             )
           })}
@@ -1292,7 +1452,43 @@ export default function App() {
     createMatchState(loadStoredNames()),
   )
   const sessionRef = useRef<AudioSession | null>(null)
+  // The WAV for each player's most recent turn. Written when the recorder
+  // stops, read by the WordsCard rendered inside RoundResultScreen.
+  const wordsBlobsRef = useRef<(Blob | null)[]>([null, null])
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
+  // Leaderboard opt-in. Not in match reducer: it only affects what we send to
+  // the backend, not match flow, so it stays in App state and resets on reload.
+  const [shareOnLeaderboard, setShareOnLeaderboard] = useState(false)
+  const shareOnLeaderboardRef = useRef(shareOnLeaderboard)
+  shareOnLeaderboardRef.current = shareOnLeaderboard
+
+  // Per-player voice-clone session ids. These are opaque — the real
+  // ElevenLabs voice id stays server-side. Deleted on match end,
+  // rematch, go-home, and when the match leaves the sing/result loop.
+  const [voiceSessionIds, setVoiceSessionIds] =
+    useState<[string | null, string | null]>([null, null])
+  const voiceSessionIdsRef = useRef(voiceSessionIds)
+  voiceSessionIdsRef.current = voiceSessionIds
+
+  const clearVoiceSessions = () => {
+    const current = voiceSessionIdsRef.current
+    setVoiceSessionIds([null, null])
+    for (const id of current) if (id) void deleteVoice(id)
+  }
+
+  const handleVoiceSessionCreated = (player: PlayerIndex, id: string) => {
+    setVoiceSessionIds((prev) => {
+      const next: [string | null, string | null] = [
+        ...prev,
+      ] as [string | null, string | null]
+      // If a prior clone exists for this player (e.g. they recorded again)
+      // delete it on the server before replacing.
+      const old = next[player]
+      if (old && old !== id) void deleteVoice(old)
+      next[player] = id
+      return next
+    })
+  }
 
   const inMatch =
     state.phase === "turnReady" ||
@@ -1310,6 +1506,18 @@ export default function App() {
 
   useEffect(() => () => sessionRef.current?.close(), [])
 
+  // Belt-and-braces: delete any lingering voice clones if the player
+  // closes the tab. keepalive on the DELETE lets the request land.
+  useEffect(() => {
+    const onUnload = () => {
+      for (const id of voiceSessionIdsRef.current) {
+        if (id) void deleteVoice(id)
+      }
+    }
+    window.addEventListener("pagehide", onUnload)
+    return () => window.removeEventListener("pagehide", onUnload)
+  }, [])
+
   const closeSession = () => {
     sessionRef.current?.close()
     sessionRef.current = null
@@ -1321,12 +1529,14 @@ export default function App() {
       return
     }
     closeSession()
+    clearVoiceSessions()
     dispatch({ type: "GO_HOME" })
   }
 
   const confirmLeave = () => {
     setLeavePromptOpen(false)
     closeSession()
+    clearVoiceSessions()
     dispatch({ type: "GO_HOME" })
   }
 
@@ -1392,6 +1602,8 @@ export default function App() {
               }
               sessionRef.current = session
             }}
+            shareOnLeaderboard={shareOnLeaderboard}
+            onShareToggle={setShareOnLeaderboard}
             onStart={() => dispatch({ type: "START_MATCH" })}
           />
         )}
@@ -1399,6 +1611,9 @@ export default function App() {
           <SingScreen
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
+            nextLine={
+              isMatchOver(state) ? undefined : state.song.lines[state.round]
+            }
             audioUrl={state.song.audioUrl}
             language={state.song.language}
             round={state.round}
@@ -1419,6 +1634,9 @@ export default function App() {
                 samples,
               })
             }}
+            onBlob={(blob) => {
+              wordsBlobsRef.current[player] = blob
+            }}
           />
         )}
         {state.phase === "handover" && (
@@ -1430,6 +1648,10 @@ export default function App() {
         {state.phase === "roundResult" && (
           <RoundResultScreen
             state={state}
+            wordsBlobs={wordsBlobsRef.current}
+            shareOnLeaderboard={shareOnLeaderboard}
+            voiceSessionIds={voiceSessionIds}
+            onVoiceSessionCreated={handleVoiceSessionCreated}
             onHome={goHome}
             onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}
           />
@@ -1437,9 +1659,13 @@ export default function App() {
         {state.phase === "final" && (
           <FinalScreen
             state={state}
-            onRematch={() => dispatch({ type: "REMATCH" })}
+            onRematch={() => {
+              clearVoiceSessions()
+              dispatch({ type: "REMATCH" })
+            }}
             onHome={() => {
               closeSession()
+              clearVoiceSessions()
               dispatch({ type: "GO_HOME" })
             }}
           />
