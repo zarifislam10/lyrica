@@ -22,7 +22,7 @@ import {
   type MatchState,
   type PlayerIndex,
 } from "@/domain/match"
-import { buildRoundResultPayload } from "@/domain/announcer"
+import { PLAYER_IDS, buildRoundResultPayload } from "@/domain/announcer"
 import { syllableDisplayTexts } from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
@@ -1041,6 +1041,7 @@ function useAnnouncement(state: MatchState) {
     enabled ? "loading" : "fallback",
   )
   const [commentary, setCommentary] = useState<string | null>(null)
+  const [coaching, setCoaching] = useState<Record<string, string>>({})
   const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -1064,6 +1065,7 @@ function useAnnouncement(state: MatchState) {
           return
         }
         setCommentary(result.commentary)
+        setCoaching(result.coaching)
         setStatus("live")
         const audio = new Audio(result.audioUrl)
         audioRef.current = audio
@@ -1088,7 +1090,7 @@ function useAnnouncement(state: MatchState) {
       .catch(() => setNeedsTap(true))
   }
 
-  return { status, commentary, rejectedReasons, needsTap, playAudio }
+  return { status, commentary, coaching, rejectedReasons, needsTap, playAudio }
 }
 
 function RoundResultScreen({
@@ -1147,6 +1149,12 @@ function RoundResultScreen({
                   <WordsComingSoon />
                 </div>
                 <p>{coach.body}</p>
+                {announcer.coaching[PLAYER_IDS[player]] && (
+                  <p className="coach-tip">
+                    <small>Coach</small>
+                    {announcer.coaching[PLAYER_IDS[player]]}
+                  </p>
+                )}
               </div>
             )
           })}

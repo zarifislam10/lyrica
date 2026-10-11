@@ -79,9 +79,17 @@ Successful response (`200`):
 {
   "commentary": "Laiba wins round 1! Great effort from both singers!",
   "audioUrl": "data:audio/mpeg;base64,<MP3 bytes encoded as base64>",
-  "fallback": false
+  "fallback": false,
+  "coaching": {"p2": "Practice saying chu and ka slowly, or tap Hear it to repeat."}
 }
 ```
+
+**Coaching (optional).** Send `language` (`en`, `ko` or `ar`) and, per player,
+`missedDetails: [{"text": "축", "romanization": "chu"}]`. Gemini then words one
+practice tip per player who missed syllables, in parallel with the announcer, so
+it adds no wait. It only rephrases the syllables our scorer marked; it never hears
+the take. `coaching` is `{}` when nobody missed anything, on fallback, or if the
+coaching call fails — the announcer is unaffected either way.
 
 `audioUrl` is a self-contained MP3 data URL: pass it directly to `new Audio(audioUrl)`.
 It needs no second download endpoint, public storage, or database. If the frontend

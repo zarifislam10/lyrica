@@ -3,11 +3,15 @@ import { describe, expect, it } from "vitest"
 import { buildRoundResultPayload, describeRejection } from "@/domain/announcer"
 import { createMatchState, matchReducer } from "@/domain/match"
 
-function finishedRound(names: [string, string] = ["Ava", "Sam"]) {
+function finishedRound(
+  names: [string, string] = ["Ava", "Sam"],
+  songId = "happy-birthday-en",
+) {
   let state = matchReducer(createMatchState(names), {
     type: "CHOOSE_MODE",
     mode: "battle",
   })
+  state = matchReducer(state, { type: "SELECT_SONG", songId })
   state = matchReducer(state, { type: "START_MATCH" })
   state = matchReducer(state, {
     type: "TURN_SCORED",
@@ -32,11 +36,36 @@ describe("buildRoundResultPayload", () => {
       round: 1,
       lineId: "1",
       players: [
-        { id: "p1", name: "Ava", score: 82, missedSyllables: ["birth"] },
-        { id: "p2", name: "Sam", score: 74, missedSyllables: ["py", "birth"] },
+        {
+          id: "p1",
+          name: "Ava",
+          score: 82,
+          missedSyllables: ["birth"],
+          missedDetails: [{ text: "birth" }],
+        },
+        {
+          id: "p2",
+          name: "Sam",
+          score: 74,
+          missedSyllables: ["py", "birth"],
+          missedDetails: [{ text: "py" }, { text: "birth" }],
+        },
       ],
       winnerId: "p1",
+      language: "en",
     })
+  })
+
+  it("gives the coach each missed syllable with its romanization", () => {
+    const payload = buildRoundResultPayload(
+      finishedRound(["Ava", "Sam"], "happy-birthday-ko"),
+    )
+    expect(payload.language).toBe("ko")
+    expect(payload.players[1].missedDetails).toEqual([
+      { text: "일", romanization: "il" },
+      { text: "축", romanization: "chu" },
+    ])
+    expect(payload.players[1].missedSyllables).toEqual(["일", "축"])
   })
 
   it("sends numbered names when both players share a name", () => {
