@@ -155,3 +155,26 @@ before the demo. A full live Gemini + ElevenLabs call requires both valid keys.
 
 Provider references: [Gemini](https://ai.google.dev/api) and
 [ElevenLabs](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
+
+## "Hear it" clips (offline, before the demo)
+
+`generate_hear_it.py` asks ElevenLabs text-to-speech to speak each song's line and
+saves it as `public/songs/<song id>.mp3`. The "Hear it" button plays that file.
+It runs on your machine, not on the server; commit the mp3s it writes.
+
+```sh
+python generate_hear_it.py                     # every song
+python generate_hear_it.py happy-birthday-ar   # one song
+python generate_hear_it.py --force happy-birthday-ko   # re-render
+```
+
+- The text is read from `src/data/songs.ts` with Node, so a clip always says exactly
+  what players sing. Every round of a song has the same words, so one clip per song.
+- Speech is slowed to 0.85× so learners can follow each syllable.
+- Each clip spends credits. Existing files are kept unless you pass `--force`.
+- Optional settings in `.env`: `ELEVENLABS_HEAR_IT_VOICE_ID` (falls back to
+  `ELEVENLABS_VOICE_ID`) and `ELEVENLABS_HEAR_IT_MODEL_ID` (default
+  `eleven_multilingual_v2`, which supports Korean and Arabic).
+
+Listen to every clip before committing, especially Korean and Arabic. If the
+pronunciation is off, try another voice or model and re-run with `--force`.
