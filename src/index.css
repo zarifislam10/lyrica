@@ -2019,8 +2019,34 @@ button:focus-visible {
   }
 }
 
+.song-tag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.song-tag .song-tag-title {
+  color: #fff8ff;
+  font-size: 18px;
+  text-transform: none;
+}
+
+.song-tag-title {
+  font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
 /* Arabic letters must stay connected: negative tracking splits them. */
 .lyric-grid:lang(ar) .syllable .hangul,
+.song-tag-title:lang(ar),
 .mode-card .song-title:lang(ar) {
   font-family: "Noto Sans Arabic", sans-serif;
   letter-spacing: normal;
