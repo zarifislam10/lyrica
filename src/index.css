@@ -447,20 +447,22 @@ button:focus-visible {
   }
 }
 
-.halftone-sparkle ellipse,
-.dot-star ellipse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: dotTwinkle 4s ease-in-out infinite;
+/* Each sparkle is hundreds of SVG dots. Animate the whole SVG, never the
+   dots: motion inside an SVG repaints every dot every frame, while a whole
+   element on its own layer is drawn once and moved by the GPU. */
+.home-star,
+.dot-star,
+.logo-mic {
+  will-change: transform;
 }
 
-.halftone-sparkle ellipse:nth-child(3n),
-.dot-star ellipse:nth-child(3n) {
-  animation-delay: -1.5s;
+.corner-dots .halftone-sparkle {
+  will-change: opacity;
+  animation: sparkleBreathe 4s ease-in-out infinite alternate;
 }
 
-.halftone-sparkle ellipse:nth-child(4n) {
-  animation-delay: -2.7s;
+.corner-dots .corner-star-two {
+  animation-delay: -2s;
 }
 
 .corner-star-one {
@@ -1472,9 +1474,9 @@ button:focus-visible {
   50% { opacity: 0.35; transform: scale(0.7); }
 }
 
-@keyframes dotTwinkle {
-  0%, 100% { transform: rotate(30deg) scale(0.82); }
-  50% { transform: rotate(30deg) scale(1); }
+@keyframes sparkleBreathe {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
 }
 
 @keyframes ringWave {
@@ -2193,6 +2195,104 @@ button:focus-visible {
   animation: pulse 1.8s ease-in-out infinite;
 }
 
+/* ---- Words card: two side-by-side bars (Tune, Words) + verdict + source. */
+.words-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.words-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.words-bar {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 6px;
+  background: rgb(11 7 16 / 0.55);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 320ms ease-out,
+    transform 320ms ease-out;
+}
+
+.words-bar.enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.words-bar small {
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.words-bar strong {
+  margin: 0;
+  color: #fff;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(32px, 7vw, 52px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Tune number takes the player tint. Words stays neutral — it's a different
+   measurement and we don't want the colours to imply agreement. */
+.words-bar.tune strong {
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--player) 70%, transparent),
+    3px 3px 0 color-mix(in srgb, var(--player) 55%, transparent);
+}
+
+.words-bar.words strong {
+  color: #e8dcff;
+  text-shadow: 0 0 14px rgb(155 61 255 / 0.35);
+}
+
+.words-bar-caption {
+  color: #a69bb5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.words-bar-pending {
+  display: flex;
+  min-height: clamp(32px, 7vw, 52px);
+  align-items: center;
+  justify-content: center;
+  color: #d9c8ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.words-verdict {
+  margin: 0;
+  color: #e4d8ea;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.words-source {
+  margin: 0;
+  color: #8f8299;
+  font-size: 11px;
+  text-align: center;
+}
+
+.final-score-slots.words-card .words-bar strong,
+.words-card .words-bar strong {
+  font-size: clamp(32px, 7vw, 52px);
+}
+
 .final-score-slots {
   --player: #ff4fa3;
 }
@@ -2279,4 +2379,120 @@ button:focus-visible {
   font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
   font-size: 22px;
   font-weight: 700;
+}
+
+/* Gemini's practice tip, worded from the syllables our scorer marked missed. */
+.coach-tip {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--player, #ff4fa3);
+  border-radius: 8px;
+  color: #fff8ff;
+  background: #1d1422;
+}
+
+.coach-tip small {
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+/* Leaderboard opt-in: unobtrusive checkbox on SetupScreen (battle only). */
+.share-leaderboard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: #c4b5c9;
+  cursor: pointer;
+}
+
+.share-leaderboard input {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff4fa3;
+  cursor: pointer;
+}
+
+/* Leaderboard panel on FinalScreen. Hidden entirely when there's no data. */
+.leaderboard-panel {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #1d1422;
+  color: #fff8ff;
+  display: grid;
+  gap: 14px;
+}
+
+.leaderboard-panel header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #c4b5c9;
+}
+
+.leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  counter-reset: rank;
+}
+
+.leaderboard-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #241728;
+  counter-increment: rank;
+}
+
+.leaderboard-list li::before {
+  content: counter(rank) ".";
+  color: #c4b5c9;
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-list li b {
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-hardest small {
+  display: block;
+  color: #c4b5c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.leaderboard-hardest ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-hardest li {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #241728;
+  font-size: 13px;
 }

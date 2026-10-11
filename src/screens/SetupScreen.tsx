@@ -45,13 +45,13 @@ const SETUP_COPY: Record<GameMode, SetupCopy> = {
   solo: {
     tag: "Solo · one singer",
     heading: "Who's singing?",
-    body: "Three lines. You'll get a Tune score after each one.",
+    body: "One line. You'll get a Tune score and the syllables to fix.",
     start: "Start singing",
   },
   battle: {
     tag: "Two players · one device",
     heading: "Name the singers",
-    body: "Take turns on this device. Best of three lines.",
+    body: "Take turns on this device. One line, higher score wins.",
     start: "Start battle",
   },
 }
@@ -62,6 +62,8 @@ export default function SetupScreen({
   names,
   onNameChange,
   onMicReady,
+  shareOnLeaderboard,
+  onShareToggle,
   onStart,
 }: {
   mode: GameMode
@@ -69,6 +71,8 @@ export default function SetupScreen({
   names: [string, string]
   onNameChange: (player: PlayerIndex, name: string) => void
   onMicReady: (session: AudioSession) => void
+  shareOnLeaderboard: boolean
+  onShareToggle: (next: boolean) => void
   onStart: () => void
 }) {
   const [micStatus, setMicStatus] = useState<MicStatus>("idle")
@@ -204,6 +208,17 @@ export default function SetupScreen({
           )}
           <p className="setup-copy">{micMessage[micStatus]}</p>
         </div>
+
+        {mode === "battle" && (
+          <label className="share-leaderboard">
+            <input
+              type="checkbox"
+              checked={shareOnLeaderboard}
+              onChange={(event) => onShareToggle(event.target.checked)}
+            />
+            <span>Post our scores to the global leaderboard (opt-in)</span>
+          </label>
+        )}
 
         <button
           className="start-battle-button"

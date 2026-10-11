@@ -1,11 +1,13 @@
 import {
   PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
   type MatchState,
   displayName,
   soloTotal,
 } from "@/domain/match"
+import WordsCard from "@/components/WordsCard"
+import LeaderboardPanel from "@/screens/LeaderboardPanel"
 import SongTag from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
 
 function SoloFinal({ state }: { state: MatchState }) {
   return (
@@ -13,27 +15,36 @@ function SoloFinal({ state }: { state: MatchState }) {
       <p className="player-chip" style={{ color: PLAYER_COLORS[0] }}>
         {displayName(state, 0)}
       </p>
-      <div className="score-slots final-score-slots">
-        <div className="score-slot">
-          <small>Tune</small>
-          <strong>{soloTotal(state)}</strong>
+      {/* Final-screen Words bar is intentionally wav={null} — per-round
+       takes aren't aggregated, so we show the Tune total alongside an
+       honest "Unavailable" word score rather than inventing a number. */}
+      <WordsCard
+        tune={soloTotal(state)}
+        wav={null}
+        songId={state.song.id}
+        lineId={0}
+      />
+      {state.soloScores.length > 1 && (
+        <div className="solo-rounds">
+          {state.soloScores.map((score, index) => (
+            <span key={index}>
+              Round {index + 1}
+              <b>{score}</b>
+            </span>
+          ))}
         </div>
-        <WordsComingSoon />
-      </div>
-      <div className="solo-rounds">
-        {state.soloScores.map((score, index) => (
-          <span key={index}>
-            Round {index + 1}
-            <b>{score}</b>
-          </span>
-        ))}
-      </div>
+      )}
     </>
   )
 }
 
 function BattleFinal({ state }: { state: MatchState }) {
   const winner: 0 | 1 = state.roundWins[0] >= state.roundWins[1] ? 0 : 1
+  // One round: "1 – 0" says nothing, so show the Tune scores instead.
+  const tally =
+    ROUNDS_PER_MATCH === 1
+      ? [state.turnScores[0] ?? 0, state.turnScores[1] ?? 0]
+      : state.roundWins
 
   return (
     <>
@@ -44,7 +55,7 @@ function BattleFinal({ state }: { state: MatchState }) {
       <div className="scoreboard-row">
         <span style={{ color: PLAYER_COLORS[0] }}>{displayName(state, 0)}</span>
         <span>
-          {state.roundWins[0]} – {state.roundWins[1]}
+          {tally[0]} – {tally[1]}
         </span>
         <span style={{ color: PLAYER_COLORS[1] }}>{displayName(state, 1)}</span>
       </div>
@@ -76,6 +87,7 @@ export default function FinalScreen({
             Home
           </button>
         </div>
+        <LeaderboardPanel language={state.song.language} />
       </section>
     </main>
   )

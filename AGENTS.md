@@ -7,8 +7,8 @@ Frontend is React 19 + TypeScript + Vite 8 + Tailwind CSS v4 at the repo root. B
 ## Product shape
 
 - **Two modes, same scoring and same Aux rules in both.** Aux is the on-screen announcer (ElevenLabs voice over a Gemini-written line).
-  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. Three lines, then an average at the end.
-  - **Battle:** two players, one device, best of three. Players alternate turns; Aux calls each round.
+  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. One line per session for the demo (`ROUNDS_PER_MATCH` in `src/domain/match.ts`).
+  - **Battle:** two players, one device, one line each; higher Tune score wins (ties replay). Set `ROUNDS_PER_MATCH = 3` for best of three. Players alternate turns; Aux calls each round.
 - **One song to start: Happy Birthday**, in English, Korean, and Arabic (Modern Standard). Lyrics are hard-coded, not scraped.
 - **Target notes are typed by hand as semitones.** Do not measure pitch from audio files. There are no "vocals-only" tracks for analysis.
 - **Two scores, always shown separately.**
@@ -30,7 +30,7 @@ Frontend is React 19 + TypeScript + Vite 8 + Tailwind CSS v4 at the repo root. B
 ## Provider roles
 
 - **ElevenLabs** — speaks each line (powers "Hear it"), produces syllable timings, speaks the announcer line.
-- **Gemini** — writes the announcer line **only**. It must never produce a score, pick a winner, or influence feedback.
+- **Gemini** — writes the announcer line and **words** a practice tip from the missed syllables our scorer found (`coaching` in `POST /round-result`). It never hears the take, never produces a score, never picks a winner, and never decides which syllables were missed. *(Proposed on `laiba-gemini-feedback`; needs team sign-off.)*
 - **Our code** decides scores and the winner.
 - **Tiger Data** — leaderboard storage. **Only the backend talks to it.** No TigerData client in the frontend.
 
@@ -79,10 +79,14 @@ Canonical layout. Start with task-relevant files; follow imports only when neces
 
 **Backend**
 - `backend/main.py` — FastAPI app; CORS and welcome endpoint; mounts routers.
-- `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS with a shared 5s deadline and deterministic fallback.
+- `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS, plus Gemini coaching tips run in parallel, with a shared 5s deadline and deterministic fallback. Saves a leaderboard row per player as a FastAPI BackgroundTask when `optInToLeaderboard` is true; failure here never breaks the response.
+- `backend/db.py` — asyncpg pool for Tiger Data. Reads `DATABASE_URL` once; never logs the URL. Returns None when the DB is unset or unreachable so every caller falls back to a no-op.
+- `backend/leaderboard.py` — `GET /leaderboard` (top 10 by best Tune) and `GET /leaderboard/hardest` (3 most-missed syllables). Both swallow DB errors and return `[]`. Also owns `save_turns()`, which trims nicknames to 20 chars.
+- `backend/migrate.py` — idempotent schema setup. `python -m backend.migrate` creates the `turns` table and runs `create_hypertable('turns', by_range('time'), if_not_exists => TRUE)`. Zarif runs this himself.
 - `backend/test_round_result.py` — unittest suite; mocks all provider calls.
+- `backend/test_leaderboard.py` — unittest suite; `db.get_pool` is patched so no real database is touched.
 - `backend/generate_hear_it.py` — offline script: ElevenLabs TTS speaks each song's line from `src/data/songs.ts` into `public/songs/<song id>.mp3` for "Hear it". Never called by the server. Tests in `backend/test_generate_hear_it.py` use a fake client.
-- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
+- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_ANNOUNCER_VOICE_ID` (Aux's voice; defaults to Freya), `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
 
 **ML (experimental)**
 - `ml/sound_match_test.py` — frozen wav2vec2-xls-r-300m + DTW cosine similarity probe. See `ml/README.md`. Does not touch `src/` or `backend/`.
@@ -150,6 +154,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 **In flight:**
 - `laiba-hear-it`: `backend/generate_hear_it.py` renders the "Hear it" clips with ElevenLabs TTS; clips for all three songs are in `public/songs/`. Korean pronunciation still needs a native speaker's ear.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
+- `zarif-leaderboard`: Tiger Data leaderboard. `backend/db.py` + `backend/leaderboard.py` + `backend/migrate.py` (idempotent, uses `by_range('time')` + `if_not_exists => TRUE`). Battle rounds save on opt-in; `GET /leaderboard` and `GET /leaderboard/hardest` both return `[]` when the DB is unset or down. Opt-in checkbox on `SetupScreen`; small panel on `FinalScreen` via `src/screens/LeaderboardPanel.tsx`. **Solo turns don't reach `/round-result` today**, so only battle rounds show up; a `POST /solo-turn` save-only endpoint is the natural follow-up.
 
 ## Current task owners
 
@@ -190,7 +195,7 @@ Prioritized. Work each on its own branch off latest `main`. Open one PR per item
 - Never commit voice recordings. `ml/takes/` is gitignored.
 - All song audio is generated by us (ElevenLabs). No real artists, no copyrighted lyrics, no audio taken from other recordings.
 - Do not measure pitch from audio files. Target notes are typed by hand as semitones.
-- Gemini writes announcer text only. It never scores a turn or picks a winner.
+- Gemini writes announcer text and words coaching tips from facts our code supplies. It never scores a turn, picks a winner, or judges a take it hasn't heard.
 - Only the backend talks to Tiger Data.
 - Voice clones are stretch-only, require explicit player OK, play back only to that same player, and are deleted at match end.
 - Never use the word "karaoke" in UI text.

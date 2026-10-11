@@ -46,9 +46,13 @@ Add `GEMINI_API_KEY` to your existing local `.env`. Use `.env.example` for the n
 optional settings; do not overwrite an existing `.env`. Restart the backend.
 `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. `gemini-2.5-flash` now returns
 404 for new keys, and full-size Flash models spend the 256-token budget on thinking,
-so their replies come back incomplete and the round falls back. Round speech uses
-`ELEVENLABS_ROUND_MODEL_ID=eleven_flash_v2_5` for low latency; the welcome keeps its
-existing model. Both use the same `ELEVENLABS_VOICE_ID`.
+so their replies come back incomplete and the round falls back. Round speech (Aux)
+uses Freya (`ELEVENLABS_ANNOUNCER_VOICE_ID`, default `jsCqWAovK2LkecY7zXl4`) on
+`eleven_v3` (`ELEVENLABS_ROUND_MODEL_ID`) with energetic voice settings, so she
+sounds upbeat and enthusiastic. That voice is separate from
+`ELEVENLABS_VOICE_ID`, which the "Hear it" clips use. Switch
+`ELEVENLABS_ROUND_MODEL_ID` back to `eleven_flash_v2_5` if the 5s budget starts
+slipping.
 
 The following is the initial API contract; the current checked-out frontend does
 not yet call it. Coordinate the field names with Jasleen before integrating.
@@ -79,9 +83,17 @@ Successful response (`200`):
 {
   "commentary": "Laiba wins round 1! Great effort from both singers!",
   "audioUrl": "data:audio/mpeg;base64,<MP3 bytes encoded as base64>",
-  "fallback": false
+  "fallback": false,
+  "coaching": {"p2": "Practice saying chu and ka slowly, or tap Hear it to repeat."}
 }
 ```
+
+**Coaching (optional).** Send `language` (`en`, `ko` or `ar`) and, per player,
+`missedDetails: [{"text": "축", "romanization": "chu"}]`. Gemini then words one
+practice tip per player who missed syllables, in parallel with the announcer, so
+it adds no wait. It only rephrases the syllables our scorer marked; it never hears
+the take. `coaching` is `{}` when nobody missed anything, on fallback, or if the
+coaching call fails — the announcer is unaffected either way.
 
 `audioUrl` is a self-contained MP3 data URL: pass it directly to `new Audio(audioUrl)`.
 It needs no second download endpoint, public storage, or database. If the frontend

@@ -1,0 +1,45 @@
+{
+  "method": "baseline xlsr L12",
+  "config": {
+    "model_kind": "xlsr",
+    "layer": 12,
+    "phoneme_feature": null,
+    "trim_silence": false,
+    "mean_center": false,
+    "unit_variance": false,
+    "path_agg": "mean"
+  },
+  "low": 0.548827850818634,
+  "high": 0.6505585660537084,
+  "models": {
+    "xlsr": "facebook/wav2vec2-xls-r-300m",
+    "phoneme": "facebook/wav2vec2-xlsr-53-espeak-cv-ft"
+  },
+  "sample_rate": 16000,
+  "trim_peak_db": -30.0,
+  "trim_frame_ms": 25,
+  "good_takes": [
+    "breathy.wav",
+    "faster.wav",
+    "higher.wav",
+    "loud.wav",
+    "lower.wav",
+    "monotone.wav",
+    "normal.wav",
+    "slower.wav",
+    "soft.wav",
+    "steady.wav",
+    "talking.wav",
+    "wrong-melody.wav"
+  ],
+  "no_words_bad_takes": [
+    "hum.wav",
+    "lala.wav",
+    "mumbled.wav",
+    "noise.wav",
+    "whistle.wav"
+  ],
+  "known_limitation_takes": [
+    "wrongwords.wav"
+  ]
+}

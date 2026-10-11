@@ -12,6 +12,7 @@ from unittest.mock import patch
 import httpx
 from fastapi.testclient import TestClient
 
+import leaderboard
 import main
 import round_result
 
@@ -34,7 +35,7 @@ class RoundResultTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {
             "GEMINI_API_KEY": "test-gemini", "ELEVENLABS_API_KEY": "test-eleven",
             "GEMINI_MODEL": "test-model", "ELEVENLABS_VOICE_ID": "test-voice",
-            "ELEVENLABS_ROUND_MODEL_ID": "test-tts",
+            "ELEVENLABS_ANNOUNCER_VOICE_ID": "", "ELEVENLABS_ROUND_MODEL_ID": "test-tts",
         })
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -52,7 +53,7 @@ class RoundResultTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
             "commentary": "Laiba wins round 1! Great effort from both players.",
-            "audioUrl": None, "fallback": True,
+            "audioUrl": None, "fallback": True, "coaching": {},
         })
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertNotIn("test-gemini", response.text)
@@ -67,14 +68,93 @@ class RoundResultTests(unittest.TestCase):
                 self.assertEqual(json.loads(body["contents"][0]["parts"][0]["text"]), REQUEST)
                 return httpx.Response(200, json=GEMINI)
             self.assertEqual(request.headers["xi-api-key"], "test-eleven")
-            self.assertEqual(body["text"], "Laiba wins round 1! Great effort from both singers!")
+            self.assertEqual(request.url.path,
+                             f"/v1/text-to-speech/{round_result.ANNOUNCER_VOICE_ID}")
+            self.assertEqual(
+                body["text"],
+                round_result.ANNOUNCER_SPEECH_TAGS
+                + "Laiba wins round 1! Great effort from both singers!",
+            )
             self.assertEqual(body["model_id"], "test-tts")
+            self.assertEqual(body["voice_settings"], round_result.ANNOUNCER_VOICE_SETTINGS)
             return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
         response = self.call(handler)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["fallback"])
         self.assertEqual(base64.b64decode(response.json()["audioUrl"].split(",")[1]), b"fake-mp3")
         self.assertEqual(len(calls), 2)
+
+    def test_announcer_voice_can_be_overridden_without_touching_hear_it_voice(self):
+        paths = []
+        def handler(request):
+            if "generativelanguage" in request.url.host:
+                return httpx.Response(200, json=GEMINI)
+            paths.append(request.url.path)
+            return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
+        with patch.dict(os.environ, {"ELEVENLABS_ANNOUNCER_VOICE_ID": "aux-voice"}):
+            self.assertFalse(self.call(handler).json()["fallback"])
+        self.assertEqual(paths, ["/v1/text-to-speech/aux-voice"])
+
+    def coaching_request(self):
+        request = copy.deepcopy(REQUEST)
+        request["language"] = "ko"
+        request["players"][1]["missedDetails"] = [{"text": "녕", "romanization": "nyeong"}]
+        return request
+
+    def coaching_handler(self, coaching_response, calls=None):
+        def handler(request):
+            body = json.loads(request.content)
+            if calls is not None:
+                calls.append(body)
+            if request.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"fake-mp3", headers={"Content-Type": "audio/mpeg"})
+            if "responseSchema" in body["generationConfig"]:
+                return coaching_response
+            return httpx.Response(200, json=GEMINI)
+        return handler
+
+    @staticmethod
+    def gemini_json(payload):
+        return httpx.Response(200, json={"candidates": [{"finishReason": "STOP", "content": {
+            "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}}]})
+
+    def test_coaching_words_a_tip_from_the_missed_syllables_we_send(self):
+        calls = []
+        tips = {"tips": [{"playerId": "p2", "tip": "Say nyeong slowly three times, then tap Hear it."}]}
+        response = self.call(self.coaching_handler(self.gemini_json(tips), calls), self.coaching_request())
+        self.assertFalse(response.json()["fallback"])
+        self.assertEqual(response.json()["coaching"],
+                         {"p2": "Say nyeong slowly three times, then tap Hear it."})
+        coach = next(c for c in calls if "responseSchema" in c.get("generationConfig", {}))
+        facts = json.loads(coach["contents"][0]["parts"][0]["text"])
+        self.assertEqual(facts, {"language": "Korean", "players": [
+            {"playerId": "p2", "missed": [{"text": "녕", "romanization": "nyeong"}]}]})
+        announcer = next(c for c in calls if "contents" in c and "responseSchema" not in c["generationConfig"])
+        self.assertNotIn("missedDetails", announcer["contents"][0]["parts"][0]["text"])
+
+    def test_coaching_drops_tips_for_unknown_players_or_too_long(self):
+        tips = {"tips": [{"playerId": "p1", "tip": "p1 missed nothing"},
+                         {"playerId": "p2", "tip": "word " * 30}]}
+        response = self.call(self.coaching_handler(self.gemini_json(tips)), self.coaching_request())
+        self.assertFalse(response.json()["fallback"])
+        self.assertEqual(response.json()["coaching"], {})
+
+    def test_coaching_failure_never_costs_the_announcer(self):
+        for bad in [httpx.Response(500, json={}), httpx.Response(200, json={}),
+                    self.gemini_json("not an object"),
+                    httpx.Response(200, json={"candidates": [{"finishReason": "STOP", "content": {
+                        "parts": [{"text": "not json"}]}}]})]:
+            with self.subTest(bad=bad):
+                response = self.call(self.coaching_handler(bad), self.coaching_request())
+                self.assertFalse(response.json()["fallback"])
+                self.assertEqual(response.json()["coaching"], {})
+
+    def test_unknown_language_is_rejected(self):
+        request = self.coaching_request()
+        request["language"] = "fr"
+        with patch.object(round_result, "generate_result") as generate:
+            self.assertEqual(self.client.post("/round-result", json=request).status_code, 422)
+            generate.assert_not_called()
 
     def test_missing_key_returns_immediate_fallback_without_network(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": ""}), patch.object(round_result, "generate_result") as generate:
@@ -150,6 +230,43 @@ class RoundResultTests(unittest.TestCase):
         with patch.object(round_result, "GENERATION_DEADLINE_SECONDS", 0.12):
             self.assert_fallback(self.call(handler))
         self.assertEqual(len(calls), 2)
+
+    def test_leaderboard_save_runs_only_when_opt_in_is_true(self):
+        request = copy.deepcopy(REQUEST)
+        request["optInToLeaderboard"] = True
+        request["songId"] = "happy-birthday-ko"
+        request["language"] = "ko"
+        saved = []
+        async def fake_save(rows): saved.append(rows)
+        def handler(req):
+            if req.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"mp3", headers={"Content-Type": "audio/mpeg"})
+            return httpx.Response(200, json=GEMINI)
+        with patch.object(leaderboard, "save_turns", side_effect=fake_save):
+            self.call(handler, request)
+        self.assertEqual(len(saved), 1)
+        rows = saved[0]
+        self.assertEqual([r["player"] for r in rows], ["Laiba", "Zarif"])
+        self.assertEqual(rows[1]["missed"], ["녕"])
+        self.assertEqual(rows[0]["tune"], 85)
+        self.assertEqual(rows[0]["song_id"], "happy-birthday-ko")
+        self.assertEqual(rows[0]["language"], "ko")
+        self.assertIsNone(rows[0]["words"])
+
+    def test_leaderboard_save_is_skipped_when_opt_in_is_omitted(self):
+        saved = []
+        async def fake_save(rows): saved.append(rows)
+        def handler(req):
+            if req.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"mp3", headers={"Content-Type": "audio/mpeg"})
+            return httpx.Response(200, json=GEMINI)
+        with patch.object(leaderboard, "save_turns", side_effect=fake_save):
+            self.call(handler)  # REQUEST has no optInToLeaderboard field → defaults to False
+        self.assertEqual(saved, [])
+
+    # Note on robustness: save_turns swallows its own DB errors — that's
+    # proven in test_leaderboard.py::test_save_turns_swallows_database_errors
+    # and is why we don't need a "background task crashes" test here.
 
     def test_cors_and_health(self):
         response = self.client.options("/round-result", headers={

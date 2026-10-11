@@ -10,6 +10,7 @@ import {
 import { SECONDS_PER_BEAT, songs } from "@/data/songs"
 import {
   PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
   TURN_SECONDS,
   createMatchState,
   displayName,
@@ -22,7 +23,7 @@ import {
   type MatchState,
   type PlayerIndex,
 } from "@/domain/match"
-import { buildRoundResultPayload } from "@/domain/announcer"
+import { PLAYER_IDS, buildRoundResultPayload } from "@/domain/announcer"
 import {
   bouncingBall,
   syllableDisplayTexts,
@@ -36,13 +37,14 @@ import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
 import { LANGUAGE_NAMES } from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
+import WordsCard from "@/components/WordsCard"
 import {
   createAudioContext,
   sessionFromMic,
   unlockAudio,
   type AudioSession,
 } from "@/services/audioSession"
+import { startWordsCapture, type WordsCapture } from "@/services/words"
 import {
   fetchAnnouncement,
   isFallbackForced,
@@ -368,12 +370,11 @@ function PitchLane({
   missed?: number[]
 }) {
   const clipWidth = Math.max(0, Math.min(1, progress)) * 320
-  const singerMedian =
-    samples && samples.length > 0 ? timeWeightedMedianPitch(samples) : null
-  const voicePoints =
-    samples && singerMedian !== null
-      ? samplesPath(samples, durationMs, singerMedian)
-      : ""
+  const voicePoints = useMemo(() => {
+    if (!samples || samples.length === 0) return ""
+    const median = timeWeightedMedianPitch(samples)
+    return median === null ? "" : samplesPath(samples, durationMs, median)
+  }, [samples, durationMs])
 
   return (
     <div className="pitch-lane" aria-label="Target pitch lane">
@@ -465,27 +466,34 @@ function ScreenHeader({
   playerColor?: string
   onHome: () => void
 }) {
+  const multiRound = ROUNDS_PER_MATCH > 1
   return (
     <header className="screen-header">
       <Brand onHome={onHome} />
       <div className="line-progress">
         <span>
-          Round {round} <i>of</i> 3
-          {playerLabel ? (
+          {multiRound && (
             <>
-              {" "}
-              ·{" "}
-              <b style={{ color: playerColor, fontWeight: 800 }}>
-                {playerLabel}
-              </b>
+              Round {round} <i>of</i> {ROUNDS_PER_MATCH}
             </>
+          )}
+          {multiRound && playerLabel ? <> · </> : null}
+          {playerLabel ? (
+            <b style={{ color: playerColor, fontWeight: 800 }}>{playerLabel}</b>
           ) : null}
         </span>
-        <div className="progress-dots" aria-label={`Round ${round} of 3`}>
-          {[1, 2, 3].map((item) => (
-            <i className={item === round ? "active" : ""} key={item} />
-          ))}
-        </div>
+        {multiRound && (
+          <div
+            className="progress-dots"
+            aria-label={`Round ${round} of ${ROUNDS_PER_MATCH}`}
+          >
+            {Array.from({ length: ROUNDS_PER_MATCH }, (_, i) => i + 1).map(
+              (item) => (
+                <i className={item === round ? "active" : ""} key={item} />
+              ),
+            )}
+          </div>
+        )}
       </div>
     </header>
   )
@@ -501,12 +509,12 @@ const MODE_OPTIONS: ModeOption[] = [
   {
     mode: "solo",
     title: "Solo",
-    body: "Sing three lines on your own. Get a Tune score and the syllables to fix after each one.",
+    body: "Sing a line on your own. Get a Tune score and the syllables to fix.",
   },
   {
     mode: "battle",
     title: "Battle",
-    body: "Two players, one device. Take turns singing each line. Best of three wins.",
+    body: "Two players, one device. Take turns singing the same line. Higher score wins.",
   },
 ]
 
@@ -640,6 +648,7 @@ function SingScreen({
   getSession,
   onHome,
   onScored,
+  onBlob,
 }: {
   line: PracticeLine
   nextLine?: PracticeLine
@@ -651,6 +660,7 @@ function SingScreen({
   getSession: () => Promise<AudioSession>
   onHome: () => void
   onScored: (samples: PitchSample[]) => void
+  onBlob: (blob: Blob | null) => void
 }) {
   const [singState, setSingState] = useState<SingState>("ready")
   const [count, setCount] = useState(COUNT_IN_BEATS)
@@ -671,6 +681,9 @@ function SingScreen({
   singStateRef.current = singState
   const onScoredRef = useRef(onScored)
   onScoredRef.current = onScored
+  const onBlobRef = useRef(onBlob)
+  onBlobRef.current = onBlob
+  const wordsCaptureRef = useRef<WordsCapture | null>(null)
 
   // Stops this take only; the match keeps the mic stream open.
   const cleanup = () => {
@@ -679,6 +692,8 @@ function SingScreen({
     detectorRef.current?.stop()
     detectorRef.current = null
     audioCtxRef.current = null
+    wordsCaptureRef.current?.dispose()
+    wordsCaptureRef.current = null
   }
 
   useEffect(() => cleanup, [])
@@ -770,6 +785,10 @@ function SingScreen({
     const ctx = session.ctx
     audioCtxRef.current = ctx
 
+    // Record the turn's audio alongside pitch detection. Any failure is
+    // swallowed inside the service; the Words card falls back to "unavailable".
+    wordsCaptureRef.current = startWordsCapture(session.stream)
+
     const detector = createPitchDetector({
       ctx,
       stream: session.stream,
@@ -812,14 +831,28 @@ function SingScreen({
             finalSamples.length,
             detector.framesAnalyzed(),
           )
-          cleanup()
+          // Hand off the Words capture before cleanup() disposes it. The blob
+          // is awaited so the ref is populated before TURN_SCORED dispatches,
+          // guaranteeing the RoundResult screen sees it on first paint.
+          const capture = wordsCaptureRef.current
+          wordsCaptureRef.current = null
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = 0
+          detectorRef.current?.stop()
+          detectorRef.current = null
+          audioCtxRef.current = null
           if (unclear) {
+            capture?.dispose()
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
             setError("unclear")
           } else {
-            onScoredRef.current(finalSamples)
+            const settle = capture ? capture.stop() : Promise.resolve(null)
+            void settle.then((blob) => {
+              onBlobRef.current(blob)
+              onScoredRef.current(finalSamples)
+            })
           }
           return
         }
@@ -1104,17 +1137,24 @@ type AnnouncerStatus = "loading" | "live" | "fallback" | "rejected"
 
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
-function useAnnouncement(state: MatchState) {
+function useAnnouncement(state: MatchState, shareOnLeaderboard: boolean) {
   // POST /round-result only accepts two players, so solo keeps the built-in line.
   const enabled = state.mode === "battle"
   const [status, setStatus] = useState<AnnouncerStatus>(
     enabled ? "loading" : "fallback",
   )
   const [commentary, setCommentary] = useState<string | null>(null)
+  const [coaching, setCoaching] = useState<Record<string, string>>({})
   const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
+  const payloadRef = useRef(
+    enabled
+      ? buildRoundResultPayload(state, {
+          optInToLeaderboard: shareOnLeaderboard,
+        })
+      : null,
+  )
 
   useEffect(() => {
     const payload = payloadRef.current
@@ -1134,6 +1174,7 @@ function useAnnouncement(state: MatchState) {
           return
         }
         setCommentary(result.commentary)
+        setCoaching(result.coaching)
         setStatus("live")
         const audio = new Audio(result.audioUrl)
         audioRef.current = audio
@@ -1158,22 +1199,26 @@ function useAnnouncement(state: MatchState) {
       .catch(() => setNeedsTap(true))
   }
 
-  return { status, commentary, rejectedReasons, needsTap, playAudio }
+  return { status, commentary, coaching, rejectedReasons, needsTap, playAudio }
 }
 
 function RoundResultScreen({
   state,
+  wordsBlobs,
+  shareOnLeaderboard,
   onHome,
   onContinue,
 }: {
   state: MatchState
+  wordsBlobs: (Blob | null)[]
+  shareOnLeaderboard: boolean
   onHome: () => void
   onContinue: () => void
 }) {
   const line = lineForRound(state)
   const winner = state.roundWinner
   const matchOver = isMatchOver(state)
-  const announcer = useAnnouncement(state)
+  const announcer = useAnnouncement(state, shareOnLeaderboard)
   const [forceFallback, setForceFallback] = useState(isFallbackForced)
   const solo = state.mode === "solo"
   const players: PlayerIndex[] = solo ? [0] : [0, 1]
@@ -1209,14 +1254,19 @@ function RoundResultScreen({
                   />
                   {displayName(state, player)}
                 </span>
-                <div className="score-slots">
-                  <div className="score-slot">
-                    <small>Tune</small>
-                    <strong>{state.turnScores[player] ?? 0}</strong>
-                  </div>
-                  <WordsComingSoon />
-                </div>
+                <WordsCard
+                  tune={state.turnScores[player] ?? 0}
+                  wav={wordsBlobs[player] ?? null}
+                  songId={state.song.id}
+                  lineId={line.id}
+                />
                 <p>{coach.body}</p>
+                {announcer.coaching[PLAYER_IDS[player]] && (
+                  <p className="coach-tip">
+                    <small>Coach</small>
+                    {announcer.coaching[PLAYER_IDS[player]]}
+                  </p>
+                )}
               </div>
             )
           })}
@@ -1298,7 +1348,7 @@ function RoundResultScreen({
           </div>
         ))}
 
-        {!solo && (
+        {!solo && ROUNDS_PER_MATCH > 1 && (
           <div className="scoreboard-row">
             <span style={{ color: PLAYER_COLORS[0] }}>
               {displayName(state, 0)}
@@ -1347,7 +1397,15 @@ export default function App() {
     createMatchState(loadStoredNames()),
   )
   const sessionRef = useRef<AudioSession | null>(null)
+  // The WAV for each player's most recent turn. Written when the recorder
+  // stops, read by the WordsCard rendered inside RoundResultScreen.
+  const wordsBlobsRef = useRef<(Blob | null)[]>([null, null])
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
+  // Leaderboard opt-in. Not in match reducer: it only affects what we send to
+  // the backend, not match flow, so it stays in App state and resets on reload.
+  const [shareOnLeaderboard, setShareOnLeaderboard] = useState(false)
+  const shareOnLeaderboardRef = useRef(shareOnLeaderboard)
+  shareOnLeaderboardRef.current = shareOnLeaderboard
 
   const inMatch =
     state.phase === "turnReady" ||
@@ -1447,6 +1505,8 @@ export default function App() {
               }
               sessionRef.current = session
             }}
+            shareOnLeaderboard={shareOnLeaderboard}
+            onShareToggle={setShareOnLeaderboard}
             onStart={() => dispatch({ type: "START_MATCH" })}
           />
         )}
@@ -1477,6 +1537,9 @@ export default function App() {
                 samples,
               })
             }}
+            onBlob={(blob) => {
+              wordsBlobsRef.current[player] = blob
+            }}
           />
         )}
         {state.phase === "handover" && (
@@ -1488,6 +1551,8 @@ export default function App() {
         {state.phase === "roundResult" && (
           <RoundResultScreen
             state={state}
+            wordsBlobs={wordsBlobsRef.current}
+            shareOnLeaderboard={shareOnLeaderboard}
             onHome={goHome}
             onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}
           />
