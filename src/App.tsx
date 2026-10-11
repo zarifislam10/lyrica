@@ -1277,6 +1277,7 @@ export default function App() {
     createMatchState(loadStoredNames()),
   )
   const sessionRef = useRef<AudioSession | null>(null)
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false)
 
   const inMatch =
     state.phase === "turnReady" ||
@@ -1300,12 +1301,21 @@ export default function App() {
   }
 
   const goHome = () => {
-    const leavePrompt =
-      state.mode === "solo" ? "Leave this session?" : "Leave this battle?"
-    if (inMatch && !window.confirm(leavePrompt)) return
+    if (inMatch) {
+      setLeavePromptOpen(true)
+      return
+    }
     closeSession()
     dispatch({ type: "GO_HOME" })
   }
+
+  const confirmLeave = () => {
+    setLeavePromptOpen(false)
+    closeSession()
+    dispatch({ type: "GO_HOME" })
+  }
+
+  const cancelLeave = () => setLeavePromptOpen(false)
 
   // Reuse the match's stream; only re-ask if the mic was unplugged or closed.
   const getSession = async (): Promise<AudioSession> => {
@@ -1419,6 +1429,59 @@ export default function App() {
             }}
           />
         )}
+        {leavePromptOpen && (
+          <LeavePrompt
+            mode={state.mode}
+            onCancel={cancelLeave}
+            onConfirm={confirmLeave}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LeavePrompt({
+  mode,
+  onCancel,
+  onConfirm,
+}: {
+  mode: GameMode
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const session = mode === "solo" ? "session" : "battle"
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onCancel])
+  return (
+    <div
+      className="leave-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leave-title"
+      onClick={onCancel}
+    >
+      <div className="leave-dialog" onClick={(e) => e.stopPropagation()}>
+        <h2 id="leave-title">Leave this {session}?</h2>
+        <p>Your scores for this round will be lost.</p>
+        <div className="leave-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onCancel}
+            autoFocus
+          >
+            Stay
+          </button>
+          <button className="primary-button" type="button" onClick={onConfirm}>
+            Leave
+          </button>
+        </div>
       </div>
     </div>
   )
