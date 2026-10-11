@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { postWordsScore, type WordsResult } from "@/services/words"
 
@@ -23,7 +23,6 @@ export default function WordsCard({
   const [status, setStatus] = useState<Status>(wav ? "loading" : "unavailable")
   const [result, setResult] = useState<WordsResult | null>(null)
   const [phase, setPhase] = useState<Phase>("pending")
-  const abandoned = useRef(false)
 
   // One-shot: swap pending → tune → words so the cards animate in order.
   useEffect(() => {
@@ -37,8 +36,15 @@ export default function WordsCard({
 
   // Kick off the Words fetch when the blob arrives. Any failure flips us to
   // unavailable; a stand-in Words number is never rendered.
+  //
+  // Cancellation is held in a per-effect local flag, not a ref. Under React 18
+  // Strict Mode the effect double-mounts in dev: a ref-based flag gets reset
+  // by the second mount, so the first mount's stale resolution still writes
+  // to state. With both requests resolving in parallel, whichever landed last
+  // decided the UI, which is how a successful 200 was still rendering as
+  // "Unavailable" when the parallel sibling request returned null.
   useEffect(() => {
-    abandoned.current = false
+    let cancelled = false
     if (!wav) {
       setStatus("unavailable")
       setResult(null)
@@ -46,7 +52,7 @@ export default function WordsCard({
     }
     setStatus("loading")
     void postWordsScore(wav, songId, lineId).then((res) => {
-      if (abandoned.current) return
+      if (cancelled) return
       if (!res) {
         setStatus("unavailable")
         setResult(null)
@@ -56,7 +62,7 @@ export default function WordsCard({
       setStatus("ready")
     })
     return () => {
-      abandoned.current = true
+      cancelled = true
     }
   }, [wav, songId, lineId])
 
