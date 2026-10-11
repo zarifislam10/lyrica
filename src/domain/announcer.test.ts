@@ -53,7 +53,16 @@ describe("buildRoundResultPayload", () => {
       ],
       winnerId: "p1",
       language: "en",
+      songId: "happy-birthday-en",
+      optInToLeaderboard: false,
     })
+  })
+
+  it("passes through the leaderboard opt-in", () => {
+    const payload = buildRoundResultPayload(finishedRound(), {
+      optInToLeaderboard: true,
+    })
+    expect(payload.optInToLeaderboard).toBe(true)
   })
 
   it("gives the coach each missed syllable with its romanization", () => {

@@ -6,6 +6,7 @@ import {
   soloTotal,
 } from "@/domain/match"
 import WordsCard from "@/components/WordsCard"
+import LeaderboardPanel from "@/screens/LeaderboardPanel"
 import SongTag from "@/screens/SongTag"
 
 function SoloFinal({ state }: { state: MatchState }) {
@@ -86,6 +87,7 @@ export default function FinalScreen({
             Home
           </button>
         </div>
+        <LeaderboardPanel language={state.song.language} />
       </section>
     </main>
   )

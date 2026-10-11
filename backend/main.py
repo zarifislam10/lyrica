@@ -11,6 +11,7 @@ from elevenlabs.core.api_error import ApiError
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from leaderboard import router as leaderboard_router
 from round_result import router as round_result_router
 from words import init_words_service, router as words_router
 
@@ -34,6 +35,7 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 app.include_router(round_result_router)
+app.include_router(leaderboard_router)
 app.include_router(words_router)
 WELCOME_TEXT = "Welcome to Lyrica! Round one starts now!"
 

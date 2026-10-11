@@ -1067,7 +1067,7 @@ type AnnouncerStatus = "loading" | "live" | "fallback" | "rejected"
 
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
-function useAnnouncement(state: MatchState) {
+function useAnnouncement(state: MatchState, shareOnLeaderboard: boolean) {
   // POST /round-result only accepts two players, so solo keeps the built-in line.
   const enabled = state.mode === "battle"
   const [status, setStatus] = useState<AnnouncerStatus>(
@@ -1078,7 +1078,13 @@ function useAnnouncement(state: MatchState) {
   const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
+  const payloadRef = useRef(
+    enabled
+      ? buildRoundResultPayload(state, {
+          optInToLeaderboard: shareOnLeaderboard,
+        })
+      : null,
+  )
 
   useEffect(() => {
     const payload = payloadRef.current
@@ -1129,18 +1135,20 @@ function useAnnouncement(state: MatchState) {
 function RoundResultScreen({
   state,
   wordsBlobs,
+  shareOnLeaderboard,
   onHome,
   onContinue,
 }: {
   state: MatchState
   wordsBlobs: (Blob | null)[]
+  shareOnLeaderboard: boolean
   onHome: () => void
   onContinue: () => void
 }) {
   const line = lineForRound(state)
   const winner = state.roundWinner
   const matchOver = isMatchOver(state)
-  const announcer = useAnnouncement(state)
+  const announcer = useAnnouncement(state, shareOnLeaderboard)
   const [forceFallback, setForceFallback] = useState(isFallbackForced)
   const solo = state.mode === "solo"
   const players: PlayerIndex[] = solo ? [0] : [0, 1]
@@ -1323,6 +1331,11 @@ export default function App() {
   // stops, read by the WordsCard rendered inside RoundResultScreen.
   const wordsBlobsRef = useRef<(Blob | null)[]>([null, null])
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
+  // Leaderboard opt-in. Not in match reducer: it only affects what we send to
+  // the backend, not match flow, so it stays in App state and resets on reload.
+  const [shareOnLeaderboard, setShareOnLeaderboard] = useState(false)
+  const shareOnLeaderboardRef = useRef(shareOnLeaderboard)
+  shareOnLeaderboardRef.current = shareOnLeaderboard
 
   const inMatch =
     state.phase === "turnReady" ||
@@ -1422,6 +1435,8 @@ export default function App() {
               }
               sessionRef.current = session
             }}
+            shareOnLeaderboard={shareOnLeaderboard}
+            onShareToggle={setShareOnLeaderboard}
             onStart={() => dispatch({ type: "START_MATCH" })}
           />
         )}
@@ -1464,6 +1479,7 @@ export default function App() {
           <RoundResultScreen
             state={state}
             wordsBlobs={wordsBlobsRef.current}
+            shareOnLeaderboard={shareOnLeaderboard}
             onHome={goHome}
             onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}
           />
