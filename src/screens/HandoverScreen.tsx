@@ -1,4 +1,9 @@
-import { PLAYER_COLORS, type MatchState, displayName } from "@/domain/match"
+import {
+  PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
+  type MatchState,
+  displayName,
+} from "@/domain/match"
 import SongTag, { SongTitle } from "@/screens/SongTag"
 
 export default function HandoverScreen({
@@ -10,6 +15,7 @@ export default function HandoverScreen({
 }) {
   const next = state.currentPlayer
   const previous = next === 0 ? 1 : 0
+  const multiRound = ROUNDS_PER_MATCH > 1
 
   return (
     <main className="screen handover-screen">
@@ -19,12 +25,13 @@ export default function HandoverScreen({
             className="player-swatch"
             style={{ background: PLAYER_COLORS[next] }}
           />
-          Round {state.round}
+          {multiRound ? `Round ${state.round}` : "Your turn"}
         </p>
         <SongTag song={state.song} />
         <h1>Pass the mic to {displayName(state, next)}</h1>
         <p className="handover-copy">
-          {displayName(state, previous)} just sang line {state.round} of{" "}
+          {displayName(state, previous)} just sang{" "}
+          {multiRound && <>line {state.round} of </>}
           <SongTitle song={state.song} />. Keep that score hidden until both of
           you have sung.
         </p>
