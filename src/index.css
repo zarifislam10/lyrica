@@ -197,6 +197,13 @@ button:focus-visible {
   line-height: 1.45;
 }
 
+.home-content > p.home-subline:not(.home-eyebrow) {
+  margin-top: 8px;
+  color: #c9b3cc;
+  font-size: clamp(14px, 1.6vw, 18px);
+  font-weight: 500;
+}
+
 .home-content button {
   position: relative;
   display: inline-flex;
@@ -218,11 +225,11 @@ button:focus-visible {
   letter-spacing: 0.055em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), background 160ms ease, border-color 160ms ease;
 }
 
 .home-content button:hover {
-  transform: translateY(-3px);
+  transform: translateY(-6px) rotate(-2deg) scale(1.06);
   border-color: #19b5ff;
   background: #19b5ff;
 }
@@ -288,6 +295,156 @@ button:focus-visible {
 .tiny-star-two {
   right: 18%;
   bottom: 18%;
+}
+
+.home-star {
+  animation:
+    starFloat 9s ease-in-out infinite alternate,
+    starTurn 70s linear infinite;
+}
+
+.star-cyan {
+  animation-duration: 11s, 90s;
+  animation-delay: -3s, 0s;
+  animation-direction: alternate, reverse;
+}
+
+.star-violet {
+  animation-duration: 10s, 80s;
+  animation-delay: -6s, 0s;
+}
+
+.star-orange {
+  animation-duration: 12s, 100s;
+  animation-delay: -2s, 0s;
+  animation-direction: alternate, reverse;
+}
+
+.home-dot-art .dot-star {
+  animation:
+    starTurn 10s linear infinite,
+    starPulse 2.4s ease-in-out infinite alternate;
+}
+
+.home-dot-art .tiny-star-two {
+  animation-duration: 13s, 3s;
+  animation-direction: reverse, alternate;
+}
+
+.home-content h1 > i {
+  width: 0.36em;
+  height: 0.95em;
+  margin: 0 0.04em;
+  background: none;
+}
+
+.logo-mic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 0.05em rgb(255 79 163 / 0.55));
+  animation: micSway 2.6s ease-in-out infinite alternate;
+}
+
+.home-content > * {
+  animation: homeRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.home-content > :nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.home-content > :nth-child(3) {
+  animation-delay: 0.25s;
+}
+
+.home-content > :nth-child(4) {
+  animation-delay: 0.35s;
+}
+
+.home-content > :nth-child(5) {
+  animation-delay: 0.5s;
+}
+
+.home-content button::before {
+  display: inline-block;
+  animation: starTurn 4s linear infinite;
+}
+
+.home-content button::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
+  translate: -120% 0;
+  transition: translate 0.6s ease;
+  pointer-events: none;
+}
+
+.home-content button:hover::after {
+  translate: 120% 0;
+}
+
+.home-content h1 > i::after {
+  bottom: calc(100% - 1em);
+  left: calc(100% + 1.4em);
+  color: #19b5ff;
+  font-size: 0.12em;
+  transform: none;
+  animation:
+    starTurn 6s linear infinite,
+    starPulse 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes starFloat {
+  from {
+    translate: 0 0;
+    scale: 1;
+  }
+  to {
+    translate: 18px -22px;
+    scale: 1.06;
+  }
+}
+
+@keyframes starTurn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes starPulse {
+  from {
+    scale: 0.85;
+    opacity: 0.65;
+  }
+  to {
+    scale: 1.2;
+    opacity: 1;
+  }
+}
+
+@keyframes micSway {
+  from {
+    rotate: -4deg;
+  }
+  to {
+    rotate: 5deg;
+  }
+}
+
+@keyframes homeRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .halftone-sparkle ellipse,

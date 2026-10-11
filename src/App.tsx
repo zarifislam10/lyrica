@@ -154,6 +154,22 @@ function DotStar({
   )
 }
 
+function LogoMic() {
+  return (
+    <svg className="logo-mic" viewBox="0 0 38 100" aria-hidden="true">
+      <rect x="11" y="37" width="24" height="62" rx="12" fill="#19B5FF" />
+      <rect x="7" y="35" width="24" height="62" rx="12" fill="#FF4FA3" />
+      <rect x="11.5" y="43" width="4" height="22" rx="2" fill="#FFB3D6" />
+      <rect x="19" y="52" width="7" height="12" rx="2.5" fill="#1A0F22" />
+      <rect x="4" y="4" width="34" height="32" rx="16" fill="#19B5FF" />
+      <rect x="1" y="1" width="34" height="32" rx="16" fill="#FFF8FF" />
+      <rect x="8" y="9.5" width="20" height="4" rx="2" fill="#1A0F22" />
+      <rect x="8" y="16" width="20" height="4" rx="2" fill="#1A0F22" />
+      <rect x="8" y="22.5" width="20" height="4" rx="2" fill="#1A0F22" />
+    </svg>
+  )
+}
+
 function CornerDots() {
   return (
     <div className="corner-dots" aria-hidden="true">
@@ -502,10 +518,13 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
         <p className="home-eyebrow">YOUR VOICE · YOUR STAGE</p>
         <h1 aria-label="Lyrica">
           <span aria-hidden="true">Lyr</span>
-          <i aria-hidden="true" />
+          <i aria-hidden="true">
+            <LogoMic />
+          </i>
           <span aria-hidden="true">ca</span>
         </h1>
-        <p>Sing it like you mean it. In any language.</p>
+        <p>Learn a language by singing it.</p>
+        <p className="home-subline">Sing it. Say it right. Win the round.</p>
         <button onClick={onStart}>Start singing</button>
       </section>
     </main>

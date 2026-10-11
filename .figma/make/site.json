@@ -3,7 +3,7 @@
   "icons": {
     "icon": "/favicon.png"
   },
-  "description": "A mobile-first karaoke coach helps non-Korean speakers sing lines accurately by visualizing pitch, scoring performance, and offering real-time tips.",
+  "description": "Learn a language by singing it. Two players take turns singing lines in Korean, Spanish, or English and get scored on tune, with feedback on the syllables they missed.",
   "robots": {
     "index": false
   },
