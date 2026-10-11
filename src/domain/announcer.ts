@@ -18,13 +18,13 @@ const PLAYER_IDS = ["p1", "p2"] as const
 
 /** Builds the body for `POST /round-result` from a finished round. */
 export function buildRoundResultPayload(state: MatchState): RoundResultPayload {
-  const line = lineForRound(state.round)
+  const line = lineForRound(state)
   const player = (index: 0 | 1): RoundResultPlayer => ({
     id: PLAYER_IDS[index],
     name: displayName(state, index),
     score: state.turnScores[index] ?? 0,
     missedSyllables: state.turnMissed[index]
-      .map((i) => line.syllables[i]?.hangul)
+      .map((i) => line.syllables[i]?.text)
       .filter((text): text is string => Boolean(text)),
   })
   return {
