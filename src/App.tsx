@@ -23,7 +23,12 @@ import {
   type PlayerIndex,
 } from "@/domain/match"
 import { buildRoundResultPayload } from "@/domain/announcer"
-import { syllableDisplayTexts, syllableFill } from "@/domain/lyrics"
+import {
+  bouncingBall,
+  syllableDisplayTexts,
+  syllableFill,
+  type BallPosition,
+} from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
 import type { Language, PitchSample, PracticeLine } from "@/domain/types"
@@ -254,6 +259,7 @@ function LyricSyllables({
   missed = [],
   fill,
   litColor,
+  ball,
 }: {
   line: PracticeLine
   language: Language
@@ -262,11 +268,16 @@ function LyricSyllables({
   missed?: number[]
   fill?: number[]
   litColor?: string
+  ball?: BallPosition
 }) {
   const texts = syllableDisplayTexts(line)
   return (
     <div
-      className={`lyric-grid ${fill ? "singing" : ""}`}
+      className={[
+        "lyric-grid",
+        fill ? "singing" : "",
+        ball ? "with-ball" : "",
+      ].join(" ")}
       lang={language}
       // Arabic reads right to left here; the pitch lane stays left to right
       // as a timeline. Agreed with the team, not an oversight.
@@ -301,6 +312,13 @@ function LyricSyllables({
           </div>
         )
       })}
+      {ball && (
+        <span
+          className="lyric-ball"
+          aria-hidden="true"
+          style={{ "--slot": ball.slot, "--lift": ball.lift } as CSSProperties}
+        />
+      )}
     </div>
   )
 }
@@ -823,6 +841,10 @@ function SingScreen({
     singState === "recording"
       ? syllableFill(line.syllables, progress * DURATION)
       : undefined
+  const ball = bouncingBall(
+    line.syllables,
+    singState === "recording" ? progress * DURATION : 0,
+  )
 
   const errorTitle: Record<Exclude<ErrorKind, null>, string> = {
     blocked: "Mic access needed",
@@ -920,6 +942,7 @@ function SingScreen({
           activeIndex={activeIndex}
           fill={fill}
           litColor={playerColor}
+          ball={ball}
         />
 
         {nextLine && (
