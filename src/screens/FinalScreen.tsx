@@ -4,6 +4,7 @@ import {
   displayName,
   soloTotal,
 } from "@/domain/match"
+import LeaderboardPanel from "@/screens/LeaderboardPanel"
 import SongTag from "@/screens/SongTag"
 import WordsComingSoon from "@/screens/WordsComingSoon"
 
@@ -76,6 +77,7 @@ export default function FinalScreen({
             Home
           </button>
         </div>
+        <LeaderboardPanel language={state.song.language} />
       </section>
     </main>
   )

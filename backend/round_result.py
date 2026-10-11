@@ -9,8 +9,10 @@ from typing import Annotated, Literal
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, BackgroundTasks, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+import leaderboard
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,6 +44,10 @@ class RoundResultRequest(BaseModel):
     # The frontend decides the outcome. Null explicitly means a tie.
     winnerId: ShortText | None
     language: Literal["en", "ko", "ar"] | None = None
+    songId: ShortText | None = None
+    # Leaderboard save is opt-in and defaults off; a false/absent value means
+    # the round is still announced and scored, but nothing is persisted.
+    optInToLeaderboard: bool = False
 
     @model_validator(mode="after")
     def validate_players(self):
@@ -87,8 +93,13 @@ def fallback_commentary(result: RoundResultRequest) -> str:
 
 def commentary_facts(result: RoundResultRequest) -> str:
     # The announcer sees the same facts as before coaching existed, plus the
-    # language when known; the per-syllable details are for the coach.
-    facts = result.model_dump(exclude={"players": {"__all__": {"missedDetails"}}})
+    # language when known. Per-syllable details go to the coach; leaderboard
+    # metadata and the song id are operational and must not reach Gemini.
+    facts = result.model_dump(exclude={
+        "players": {"__all__": {"missedDetails"}},
+        "songId": True,
+        "optInToLeaderboard": True,
+    })
     if facts["language"] is None:
         del facts["language"]
     return json.dumps(facts, ensure_ascii=False)
@@ -221,10 +232,39 @@ async def generate_result(result: RoundResultRequest, gemini_key: str,
                                coaching=coaching)
 
 
+def _turn_rows(result: RoundResultRequest) -> list[dict[str, object]]:
+    """Shape rows for the leaderboard. One row per player on this round.
+
+    Solo turns don't reach `/round-result`; today this only writes battle rounds.
+    """
+    match_id = leaderboard.new_match_id()
+    rows: list[dict[str, object]] = []
+    for player in result.players:
+        rows.append({
+            "match_id": match_id,
+            "mode": "battle",
+            "player": player.name,
+            "language": result.language,
+            "song_id": result.songId or "",
+            "line_id": result.lineId,
+            "tune": int(round(player.score)),
+            # No Words score yet (ml/ probe hasn't shipped); keep the column
+            # nullable so a later PR can fill it without a migration.
+            "words": None,
+            "missed": list(player.missedSyllables),
+        })
+    return rows
+
+
 @router.post("/round-result", response_model=RoundResultResponse)
-async def round_result(result: RoundResultRequest, response: Response) -> RoundResultResponse:
+async def round_result(result: RoundResultRequest, response: Response,
+                       background: BackgroundTasks) -> RoundResultResponse:
     """Return commentary and MP3, or text fallback within a five-second generation budget."""
     response.headers["Cache-Control"] = "no-store"
+    # Save after the response is sent so the DB never blocks the announcer path.
+    # Failure in save_turns is already swallowed and logged by type only.
+    if result.optInToLeaderboard:
+        background.add_task(leaderboard.save_turns, _turn_rows(result))
     fallback = RoundResultResponse(commentary=fallback_commentary(result),
                                    audioUrl=None, fallback=True)
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()

@@ -79,8 +79,12 @@ Canonical layout. Start with task-relevant files; follow imports only when neces
 
 **Backend**
 - `backend/main.py` — FastAPI app; CORS and welcome endpoint; mounts routers.
-- `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS, plus Gemini coaching tips run in parallel, with a shared 5s deadline and deterministic fallback.
+- `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS, plus Gemini coaching tips run in parallel, with a shared 5s deadline and deterministic fallback. Saves a leaderboard row per player as a FastAPI BackgroundTask when `optInToLeaderboard` is true; failure here never breaks the response.
+- `backend/db.py` — asyncpg pool for Tiger Data. Reads `DATABASE_URL` once; never logs the URL. Returns None when the DB is unset or unreachable so every caller falls back to a no-op.
+- `backend/leaderboard.py` — `GET /leaderboard` (top 10 by best Tune) and `GET /leaderboard/hardest` (3 most-missed syllables). Both swallow DB errors and return `[]`. Also owns `save_turns()`, which trims nicknames to 20 chars.
+- `backend/migrate.py` — idempotent schema setup. `python -m backend.migrate` creates the `turns` table and runs `create_hypertable('turns', by_range('time'), if_not_exists => TRUE)`. Zarif runs this himself.
 - `backend/test_round_result.py` — unittest suite; mocks all provider calls.
+- `backend/test_leaderboard.py` — unittest suite; `db.get_pool` is patched so no real database is touched.
 - `backend/generate_hear_it.py` — offline script: ElevenLabs TTS speaks each song's line from `src/data/songs.ts` into `public/songs/<song id>.mp3` for "Hear it". Never called by the server. Tests in `backend/test_generate_hear_it.py` use a fake client.
 - `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
 
@@ -150,6 +154,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 **In flight:**
 - `laiba-hear-it`: `backend/generate_hear_it.py` renders the "Hear it" clips with ElevenLabs TTS; clips for all three songs are in `public/songs/`. Korean pronunciation still needs a native speaker's ear.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
+- `zarif-leaderboard`: Tiger Data leaderboard. `backend/db.py` + `backend/leaderboard.py` + `backend/migrate.py` (idempotent, uses `by_range('time')` + `if_not_exists => TRUE`). Battle rounds save on opt-in; `GET /leaderboard` and `GET /leaderboard/hardest` both return `[]` when the DB is unset or down. Opt-in checkbox on `SetupScreen`; small panel on `FinalScreen` via `src/screens/LeaderboardPanel.tsx`. **Solo turns don't reach `/round-result` today**, so only battle rounds show up; a `POST /solo-turn` save-only endpoint is the natural follow-up.
 
 ## Current task owners
 

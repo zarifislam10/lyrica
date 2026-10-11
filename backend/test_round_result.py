@@ -12,6 +12,7 @@ from unittest.mock import patch
 import httpx
 from fastapi.testclient import TestClient
 
+import leaderboard
 import main
 import round_result
 
@@ -211,6 +212,43 @@ class RoundResultTests(unittest.TestCase):
         with patch.object(round_result, "GENERATION_DEADLINE_SECONDS", 0.12):
             self.assert_fallback(self.call(handler))
         self.assertEqual(len(calls), 2)
+
+    def test_leaderboard_save_runs_only_when_opt_in_is_true(self):
+        request = copy.deepcopy(REQUEST)
+        request["optInToLeaderboard"] = True
+        request["songId"] = "happy-birthday-ko"
+        request["language"] = "ko"
+        saved = []
+        async def fake_save(rows): saved.append(rows)
+        def handler(req):
+            if req.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"mp3", headers={"Content-Type": "audio/mpeg"})
+            return httpx.Response(200, json=GEMINI)
+        with patch.object(leaderboard, "save_turns", side_effect=fake_save):
+            self.call(handler, request)
+        self.assertEqual(len(saved), 1)
+        rows = saved[0]
+        self.assertEqual([r["player"] for r in rows], ["Laiba", "Zarif"])
+        self.assertEqual(rows[1]["missed"], ["녕"])
+        self.assertEqual(rows[0]["tune"], 85)
+        self.assertEqual(rows[0]["song_id"], "happy-birthday-ko")
+        self.assertEqual(rows[0]["language"], "ko")
+        self.assertIsNone(rows[0]["words"])
+
+    def test_leaderboard_save_is_skipped_when_opt_in_is_omitted(self):
+        saved = []
+        async def fake_save(rows): saved.append(rows)
+        def handler(req):
+            if req.url.host == "api.elevenlabs.io":
+                return httpx.Response(200, content=b"mp3", headers={"Content-Type": "audio/mpeg"})
+            return httpx.Response(200, json=GEMINI)
+        with patch.object(leaderboard, "save_turns", side_effect=fake_save):
+            self.call(handler)  # REQUEST has no optInToLeaderboard field → defaults to False
+        self.assertEqual(saved, [])
+
+    # Note on robustness: save_turns swallows its own DB errors — that's
+    # proven in test_leaderboard.py::test_save_turns_swallows_database_errors
+    # and is why we don't need a "background task crashes" test here.
 
     def test_cors_and_health(self):
         response = self.client.options("/round-result", headers={
