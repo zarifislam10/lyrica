@@ -1,12 +1,14 @@
 # Lyrica
 
-Lyrica is a **language learning app**. Users practice by singing lines in the language they're learning, and a two-player battle keeps it fun. It is **not** a karaoke app. Never use the word "karaoke" in UI text.
+Lyrica is a **language learning app**. Users practice by singing lines in the language they're learning, solo or in a two-player battle. It is **not** a karaoke app. Never use the word "karaoke" in UI text.
 
 Frontend is React 19 + TypeScript + Vite 8 + Tailwind CSS v4 at the repo root. Backend is Python 3 + FastAPI in `/backend`. Experimental speech-model work lives in `/ml` on branch `zarif-ml`.
 
 ## Product shape
 
-- **Two players, one device, best of three.** Players alternate turns; an announcer calls each round.
+- **Two modes, same scoring and same Aux rules in both.** Aux is the on-screen announcer (ElevenLabs voice over a Gemini-written line).
+  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. Three lines, then an average at the end.
+  - **Battle:** two players, one device, best of three. Players alternate turns; Aux calls each round.
 - **One song to start: Happy Birthday**, in English, Korean, and Arabic (Modern Standard). Lyrics are hard-coded, not scraped.
 - **Target notes are typed by hand as semitones.** Do not measure pitch from audio files. There are no "vocals-only" tracks for analysis.
 - **Two scores, always shown separately.**
@@ -38,6 +40,7 @@ Do not start a lower tier until the user confirms the tier above is done.
 
 1. **Must** (block the demo):
    - Two-player battle (merged — PR #5).
+   - Solo mode with mode picker (merged — PR #12).
    - Happy Birthday lines in 3 languages (Laiba — `laiba-songs`).
    - Announcer (merged — PR #6).
    - Words score with the hum test (Zarif — `/ml` on `zarif-ml`).
@@ -140,6 +143,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 - Pure Tune scorer (`src/domain/scoring.ts`) with vitest coverage.
 - FastAPI backend scaffold + `POST /round-result` (Gemini + ElevenLabs, 5s deadline, deterministic fallback).
 - One-device battle loop (`src/domain/match.ts`, `src/screens/`, `src/services/audioSession.ts`) — PR #5.
+- Solo mode + mode picker (`mode` field on match state, `GO_MODE` / `CHOOSE_MODE` actions, solo result screen) — PR #12.
 
 **In flight:**
 - `laiba-songs`: the app sings `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, melody typed once as semitones. Flow is home → mode → song picker → setup; `state.song` holds the choice and `lineForRound(state)` reads its lines. `src/data/lines.ts` is now a fixture for `scoring.test.ts` only. Not yet done: ElevenLabs "Hear it" clips.
