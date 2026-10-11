@@ -7,8 +7,8 @@ Frontend is React 19 + TypeScript + Vite 8 + Tailwind CSS v4 at the repo root. B
 ## Product shape
 
 - **Two modes, same scoring and same Aux rules in both.** Aux is the on-screen announcer (ElevenLabs voice over a Gemini-written line).
-  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. Three lines, then an average at the end.
-  - **Battle:** two players, one device, best of three. Players alternate turns; Aux calls each round.
+  - **Solo:** one player practices a line alone. Each take gets a Tune score (and Words when `/ml` ships) plus Aux's feedback on the missed syllables. One line per session for the demo (`ROUNDS_PER_MATCH` in `src/domain/match.ts`).
+  - **Battle:** two players, one device, one line each; higher Tune score wins (ties replay). Set `ROUNDS_PER_MATCH = 3` for best of three. Players alternate turns; Aux calls each round.
 - **One song to start: Happy Birthday**, in English, Korean, and Arabic (Modern Standard). Lyrics are hard-coded, not scraped.
 - **Target notes are typed by hand as semitones.** Do not measure pitch from audio files. There are no "vocals-only" tracks for analysis.
 - **Two scores, always shown separately.**
@@ -82,7 +82,7 @@ Canonical layout. Start with task-relevant files; follow imports only when neces
 - `backend/round_result.py` — `POST /round-result`: Gemini commentary + ElevenLabs TTS, plus Gemini coaching tips run in parallel, with a shared 5s deadline and deterministic fallback.
 - `backend/test_round_result.py` — unittest suite; mocks all provider calls.
 - `backend/generate_hear_it.py` — offline script: ElevenLabs TTS speaks each song's line from `src/data/songs.ts` into `public/songs/<song id>.mp3` for "Hear it". Never called by the server. Tests in `backend/test_generate_hear_it.py` use a fake client.
-- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
+- `backend/.env.example` — placeholder keys (`GEMINI_API_KEY`, `GEMINI_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_ROUND_MODEL_ID`, `ELEVENLABS_ANNOUNCER_VOICE_ID` (Aux's voice; defaults to Freya), `ELEVENLABS_HEAR_IT_VOICE_ID`, `ELEVENLABS_HEAR_IT_MODEL_ID`, `DATABASE_URL`, `FRONTEND_ORIGINS`). Real `.env` is gitignored.
 
 **ML (experimental)**
 - `ml/sound_match_test.py` — frozen wav2vec2-xls-r-300m + DTW cosine similarity probe. See `ml/README.md`. Does not touch `src/` or `backend/`.

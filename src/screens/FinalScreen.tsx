@@ -1,5 +1,6 @@
 import {
   PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
   type MatchState,
   displayName,
   soloTotal,
@@ -22,20 +23,27 @@ function SoloFinal({ state }: { state: MatchState }) {
         songId={state.song.id}
         lineId={0}
       />
-      <div className="solo-rounds">
-        {state.soloScores.map((score, index) => (
-          <span key={index}>
-            Round {index + 1}
-            <b>{score}</b>
-          </span>
-        ))}
-      </div>
+      {state.soloScores.length > 1 && (
+        <div className="solo-rounds">
+          {state.soloScores.map((score, index) => (
+            <span key={index}>
+              Round {index + 1}
+              <b>{score}</b>
+            </span>
+          ))}
+        </div>
+      )}
     </>
   )
 }
 
 function BattleFinal({ state }: { state: MatchState }) {
   const winner: 0 | 1 = state.roundWins[0] >= state.roundWins[1] ? 0 : 1
+  // One round: "1 – 0" says nothing, so show the Tune scores instead.
+  const tally =
+    ROUNDS_PER_MATCH === 1
+      ? [state.turnScores[0] ?? 0, state.turnScores[1] ?? 0]
+      : state.roundWins
 
   return (
     <>
@@ -46,7 +54,7 @@ function BattleFinal({ state }: { state: MatchState }) {
       <div className="scoreboard-row">
         <span style={{ color: PLAYER_COLORS[0] }}>{displayName(state, 0)}</span>
         <span>
-          {state.roundWins[0]} – {state.roundWins[1]}
+          {tally[0]} – {tally[1]}
         </span>
         <span style={{ color: PLAYER_COLORS[1] }}>{displayName(state, 1)}</span>
       </div>

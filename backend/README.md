@@ -46,9 +46,13 @@ Add `GEMINI_API_KEY` to your existing local `.env`. Use `.env.example` for the n
 optional settings; do not overwrite an existing `.env`. Restart the backend.
 `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. `gemini-2.5-flash` now returns
 404 for new keys, and full-size Flash models spend the 256-token budget on thinking,
-so their replies come back incomplete and the round falls back. Round speech uses
-`ELEVENLABS_ROUND_MODEL_ID=eleven_flash_v2_5` for low latency; the welcome keeps its
-existing model. Both use the same `ELEVENLABS_VOICE_ID`.
+so their replies come back incomplete and the round falls back. Round speech (Aux)
+uses Freya (`ELEVENLABS_ANNOUNCER_VOICE_ID`, default `jsCqWAovK2LkecY7zXl4`) on
+`eleven_v3` (`ELEVENLABS_ROUND_MODEL_ID`) with energetic voice settings, so she
+sounds upbeat and enthusiastic. That voice is separate from
+`ELEVENLABS_VOICE_ID`, which the "Hear it" clips use. Switch
+`ELEVENLABS_ROUND_MODEL_ID` back to `eleven_flash_v2_5` if the 5s budget starts
+slipping.
 
 The following is the initial API contract; the current checked-out frontend does
 not yet call it. Coordinate the field names with Jasleen before integrating.
