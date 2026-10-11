@@ -971,7 +971,7 @@ function buildCoachCopy(line: PracticeLine, missed: number[]): CoachCopy {
   }
 }
 
-type AnnouncerStatus = "loading" | "live" | "fallback"
+type AnnouncerStatus = "loading" | "live" | "fallback" | "rejected"
 
 // Asks the backend for commentary once per round result. Scores never wait on
 // it: the built-in line shows until a live reply arrives, and stays on failure.
@@ -982,6 +982,7 @@ function useAnnouncement(state: MatchState) {
     enabled ? "loading" : "fallback",
   )
   const [commentary, setCommentary] = useState<string | null>(null)
+  const [rejectedReasons, setRejectedReasons] = useState<string[]>([])
   const [needsTap, setNeedsTap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const payloadRef = useRef(enabled ? buildRoundResultPayload(state) : null)
@@ -994,7 +995,12 @@ function useAnnouncement(state: MatchState) {
     const start = setTimeout(() => {
       void fetchAnnouncement(payload, controller.signal).then((result) => {
         if (controller.signal.aborted) return
-        if (!result) {
+        if (result.kind === "rejected") {
+          setRejectedReasons(result.reasons)
+          setStatus("rejected")
+          return
+        }
+        if (result.kind === "fallback") {
           setStatus("fallback")
           return
         }
@@ -1023,7 +1029,7 @@ function useAnnouncement(state: MatchState) {
       .catch(() => setNeedsTap(true))
   }
 
-  return { status, commentary, needsTap, playAudio }
+  return { status, commentary, rejectedReasons, needsTap, playAudio }
 }
 
 function RoundResultScreen({
@@ -1110,6 +1116,20 @@ function RoundResultScreen({
           </p>
           {announcer.status === "loading" && (
             <p className="announcer-status">Announcer is on the mic…</p>
+          )}
+          {announcer.status === "rejected" && (
+            <div className="announcer-error" role="alert">
+              <strong>
+                Announcer skipped: the backend rejected this round (422)
+              </strong>
+              {announcer.rejectedReasons.length > 0 && (
+                <ul>
+                  {announcer.rejectedReasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
           {announcer.needsTap && (
             <button

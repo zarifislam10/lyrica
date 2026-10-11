@@ -1,4 +1,4 @@
-import type { RoundResultPayload } from "@/domain/announcer"
+import { describeRejection, type RoundResultPayload } from "@/domain/announcer"
 
 // The backend gives up after 5s; the extra second covers the network.
 export const ANNOUNCER_TIMEOUT_MS = 6000
@@ -8,10 +8,22 @@ const API_URL = (
   import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000"
 ).replace(/\/$/, "")
 
-export type Announcement = {
+type LiveAnnouncement = {
+  kind: "live"
   commentary: string
   audioUrl: string
 }
+
+type RejectedAnnouncement = {
+  kind: "rejected"
+  reasons: string[]
+}
+
+export type AnnouncerResult = LiveAnnouncement | {
+  kind: "fallback"
+} | RejectedAnnouncement
+
+const FALLBACK: AnnouncerResult = { kind: "fallback" }
 
 export function isFallbackForced(): boolean {
   if (!import.meta.env.DEV) return false
@@ -32,14 +44,15 @@ export function setFallbackForced(forced: boolean) {
 }
 
 /**
- * Returns live commentary + audio, or null when the caller should keep its
- * built-in line (timeout, offline, backend fallback, or missing audio).
+ * Live commentary + audio; "fallback" when the caller should keep its built-in
+ * line (timeout, offline, backend fallback, or missing audio); or "rejected"
+ * when the backend refused our payload (422), which means a frontend bug.
  */
 export async function fetchAnnouncement(
   payload: RoundResultPayload,
   signal: AbortSignal,
-): Promise<Announcement | null> {
-  if (isFallbackForced()) return null
+): Promise<AnnouncerResult> {
+  if (isFallbackForced()) return FALLBACK
 
   const timeout = new AbortController()
   const timer = setTimeout(() => timeout.abort(), ANNOUNCER_TIMEOUT_MS)
@@ -53,16 +66,14 @@ export async function fetchAnnouncement(
       body: JSON.stringify(payload),
       signal: timeout.signal,
     })
-    if (!response.ok) {
-      if (import.meta.env.DEV && response.status === 422) {
-        console.error(
-          "POST /round-result rejected the payload",
-          payload,
-          await response.json().catch(() => null),
-        )
+    if (response.status === 422) {
+      const body: unknown = await response.json().catch(() => null)
+      if (import.meta.env.DEV) {
+        console.error("POST /round-result rejected the payload", payload, body)
       }
-      return null
+      return { kind: "rejected", reasons: describeRejection(body) }
     }
+    if (!response.ok) return FALLBACK
     const result = (await response.json()) as {
       commentary?: unknown
       audioUrl?: unknown
@@ -73,11 +84,15 @@ export async function fetchAnnouncement(
       typeof result.commentary !== "string" ||
       typeof result.audioUrl !== "string"
     ) {
-      return null
+      return FALLBACK
     }
-    return { commentary: result.commentary, audioUrl: result.audioUrl }
+    return {
+      kind: "live",
+      commentary: result.commentary,
+      audioUrl: result.audioUrl,
+    }
   } catch {
-    return null
+    return FALLBACK
   } finally {
     clearTimeout(timer)
     signal.removeEventListener("abort", onAbort)
