@@ -53,7 +53,6 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     MediaRecorder?: typeof MediaRecorder
   }).MediaRecorder
   if (!Rec) {
-    console.warn("[words] MediaRecorder is not available in this browser")
     return {
       stop: async () => null,
       dispose: () => {},
@@ -61,13 +60,11 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
   }
 
   const mimeType = pickMimeType()
-  console.warn("[words] startWordsCapture mimeType=", mimeType ?? "(default)")
   const options = mimeType ? { mimeType } : undefined
   let recorder: MediaRecorder
   try {
     recorder = new Rec(stream, options)
-  } catch (err) {
-    console.warn("[words] new MediaRecorder() threw", err)
+  } catch {
     return {
       stop: async () => null,
       dispose: () => {},
@@ -79,11 +76,14 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     if (event.data && event.data.size > 0) chunks.push(event.data)
   }
 
-  // Start as soon as possible; the caller usually calls stop() a few seconds later.
+  // Start with a 1s timeslice. Without one, ondataavailable only fires at
+  // stop(), and in Chrome that final event can hang when another consumer
+  // (our pitch-detection AudioContext) is attached to the same stream.
+  // With a timeslice the recorder keeps pushing buffered chunks, so stop()
+  // sees data immediately and onstop fires reliably.
   try {
-    recorder.start()
-  } catch (err) {
-    console.warn("[words] recorder.start() threw", err)
+    recorder.start(1000)
+  } catch {
     return {
       stop: async () => null,
       dispose: () => {},
@@ -102,28 +102,19 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
   }
 
   const stop = (): Promise<Blob | null> => {
-    console.warn(
-      "[words] stop() called; state=",
-      recorder.state,
-      "chunks=",
-      chunks.length,
-    )
     if (stopped) return Promise.resolve(null)
     stopped = true
     return new Promise<Blob | null>((resolve) => {
       const finish = async () => {
         if (chunks.length === 0) {
-          console.warn("[words] stop(): no chunks captured by MediaRecorder")
           resolve(null)
           return
         }
         const raw = new Blob(chunks, { type: mimeType ?? "audio/webm" })
         try {
           const wav = await rawBlobToWav16kMono(raw)
-          if (!wav) console.warn("[words] rawBlobToWav16kMono returned null")
           resolve(wav)
-        } catch (err) {
-          console.warn("[words] rawBlobToWav16kMono threw", err)
+        } catch {
           resolve(null)
         }
       }
@@ -145,10 +136,7 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
 
 async function rawBlobToWav16kMono(raw: Blob): Promise<Blob | null> {
   const buffer = await raw.arrayBuffer()
-  if (buffer.byteLength === 0) {
-    console.warn("[words] raw blob was empty")
-    return null
-  }
+  if (buffer.byteLength === 0) return null
 
   // We decode in a short-lived AudioContext so we don't tangle with the mic
   // session's context; closed immediately after.
@@ -161,17 +149,13 @@ async function rawBlobToWav16kMono(raw: Blob): Promise<Blob | null> {
     (window as unknown as {
       webkitOfflineAudioContext?: typeof OfflineAudioContext
     }).webkitOfflineAudioContext
-  if (!AudioCtor || !OfflineCtor) {
-    console.warn("[words] AudioContext/OfflineAudioContext unavailable")
-    return null
-  }
+  if (!AudioCtor || !OfflineCtor) return null
 
   const decodeCtx = new AudioCtor()
   let decoded: AudioBuffer
   try {
     decoded = await decodeCtx.decodeAudioData(buffer.slice(0))
-  } catch (err) {
-    console.warn("[words] decodeAudioData failed", err)
+  } catch {
     void decodeCtx.close().catch(() => {})
     return null
   }
@@ -258,18 +242,11 @@ export async function postWordsScore(
       body: form,
       signal: controller.signal,
     })
-    if (!response.ok) {
-      console.warn("[words] /words-score responded", response.status)
-      return null
-    }
+    if (!response.ok) return null
     const data: unknown = await response.json()
-    if (!isWordsResult(data)) {
-      console.warn("[words] response JSON did not match WordsResult", data)
-      return null
-    }
+    if (!isWordsResult(data)) return null
     return data
-  } catch (err) {
-    console.warn("[words] fetch to /words-score threw", err)
+  } catch {
     return null
   } finally {
     window.clearTimeout(timer)
