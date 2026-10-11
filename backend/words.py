@@ -75,6 +75,7 @@ class WordsService:
 
 _service: Optional[WordsService] = None
 _init_error: Optional[str] = None
+_init_lock = threading.Lock()
 
 
 def _load_calibration() -> dict:
@@ -88,34 +89,41 @@ def _load_calibration() -> dict:
 
 
 def init_words_service() -> None:
-    """Call once at app startup. Any failure is remembered for 503s."""
+    """Called at app startup and retried from _require_service() so a
+    calibration file that appears later (e.g. after `python ml/calibrate.py`)
+    can be picked up without restarting the server."""
     global _service, _init_error
-    if _service is not None or _init_error is not None:
-        return
-    if not CALIBRATION_PATH.exists():
-        _init_error = ("Words probe not calibrated. "
-                       "Run `python ml/calibrate.py` first.")
-        return
-    try:
-        payload = _load_calibration()
-        cfg = ScoringConfig(**payload["config"])
-        device = torch.device("cpu")
-        xlsr = XlsrBackbone(device) if cfg.model_kind == "xlsr" else None
-        phoneme = PhonemeBackbone(device) if cfg.model_kind == "phoneme" else None
-        _service = WordsService(
-            cfg=cfg,
-            low=float(payload["low"]),
-            high=float(payload["high"]),
-            xlsr=xlsr,
-            phoneme=phoneme,
-            _ref_cache={},
-            _cache_lock=threading.Lock(),
-        )
-    except Exception as exc:
-        _init_error = f"Words probe failed to load: {type(exc).__name__}"
+    with _init_lock:
+        if _service is not None:
+            return
+        _init_error = None
+        if not CALIBRATION_PATH.exists():
+            _init_error = ("Words probe not calibrated. "
+                           "Run `python ml/calibrate.py` first.")
+            return
+        try:
+            payload = _load_calibration()
+            cfg = ScoringConfig(**payload["config"])
+            device = torch.device("cpu")
+            xlsr = XlsrBackbone(device) if cfg.model_kind == "xlsr" else None
+            phoneme = PhonemeBackbone(device) if cfg.model_kind == "phoneme" else None
+            _service = WordsService(
+                cfg=cfg,
+                low=float(payload["low"]),
+                high=float(payload["high"]),
+                xlsr=xlsr,
+                phoneme=phoneme,
+                _ref_cache={},
+                _cache_lock=threading.Lock(),
+            )
+        except Exception as exc:
+            _init_error = f"Words probe failed to load: {type(exc).__name__}"
 
 
 def _require_service() -> WordsService:
+    if _service is None:
+        # Retry init in case calibration.json has landed since startup.
+        init_words_service()
     if _service is None:
         raise HTTPException(503, _init_error
                             or "Words probe is not available.")

@@ -38,6 +38,8 @@ import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
 import { LANGUAGE_NAMES } from "@/screens/SongTag"
 import WordsCard from "@/components/WordsCard"
+import VoiceClonePanel from "@/components/VoiceClonePanel"
+import { deleteVoice } from "@/services/voiceClone"
 import {
   createAudioContext,
   sessionFromMic,
@@ -51,6 +53,13 @@ import {
   setFallbackForced,
 } from "@/services/announcer"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
+import {
+  playBeatTrack,
+  playCountIn,
+  playGuideWithBeat,
+  playLine as playMelodyLine,
+  stopAll as stopAllMelody,
+} from "@/services/melody"
 import { createPitchDetector } from "@/services/pitch"
 
 type SingState = "ready" | "starting" | "counting" | "recording"
@@ -669,6 +678,10 @@ function SingScreen({
   const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
   const [clipFailed, setClipFailed] = useState(false)
+  // Opt-in: the mic hears the pitched melody and it corrupts both the Tune
+  // score and the Words model, so this is off by default and labelled
+  // headphones-only in the UI.
+  const [guideWhileSinging, setGuideWhileSinging] = useState(false)
 
   const referenceRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -694,6 +707,7 @@ function SingScreen({
     audioCtxRef.current = null
     wordsCaptureRef.current?.dispose()
     wordsCaptureRef.current = null
+    stopAllMelody()
   }
 
   useEffect(() => cleanup, [])
@@ -707,6 +721,7 @@ function SingScreen({
       audio.pause()
       audio.currentTime = clipStart
     }
+    stopAllMelody()
     setReferencePlaying(false)
   }
 
@@ -719,7 +734,10 @@ function SingScreen({
     }
     audio.currentTime = clipStart
     setReferencePlaying(true)
+    // Melody plays alongside the spoken clip so Hear it carries the tune too.
+    playMelodyLine(line)
     audio.play().catch((err: unknown) => {
+      stopAllMelody()
       setReferencePlaying(false)
       if (err instanceof DOMException && err.name === "NotSupportedError") {
         setClipFailed(true)
@@ -806,7 +824,13 @@ function SingScreen({
     setCount(COUNT_IN_BEATS)
     setSingState("counting")
 
+    // Pitched count-in gives the player the starting note and the tempo.
+    // Scheduled against melody's own ctx (relative to its own now), so a
+    // small clock-drift from the mic ctx doesn't matter here.
+    playCountIn(line, COUNT_IN_BEATS, COUNT_IN_INTERVAL)
+
     let hasStartedRecording = false
+    let beatsScheduled = false
 
     const loop = () => {
       const ctxNow = audioCtxRef.current
@@ -816,6 +840,16 @@ function SingScreen({
         const remaining = recordStart - now
         const nextCount = Math.max(1, Math.ceil(remaining / COUNT_IN_INTERVAL))
         setCount(nextCount)
+        if (!beatsScheduled && remaining < 0.08) {
+          // Schedule once right before record-start. Beat ticks only by
+          // default; pitched melody only if the player opted in.
+          beatsScheduled = true
+          if (guideWhileSinging) {
+            playGuideWithBeat(line, remaining, SECONDS_PER_BEAT)
+          } else {
+            playBeatTrack(line, remaining, SECONDS_PER_BEAT)
+          }
+        }
       } else {
         if (!hasStartedRecording) {
           hasStartedRecording = true
@@ -968,6 +1002,16 @@ function SingScreen({
             }}
           />
         </div>
+
+        <label className="guide-toggle">
+          <input
+            type="checkbox"
+            checked={guideWhileSinging}
+            onChange={(e) => setGuideWhileSinging(e.target.checked)}
+            disabled={singState !== "ready"}
+          />
+          <span>Guide melody while singing (headphones only)</span>
+        </label>
 
         <LyricSyllables
           line={line}
@@ -1206,12 +1250,16 @@ function RoundResultScreen({
   state,
   wordsBlobs,
   shareOnLeaderboard,
+  voiceSessionIds,
+  onVoiceSessionCreated,
   onHome,
   onContinue,
 }: {
   state: MatchState
   wordsBlobs: (Blob | null)[]
   shareOnLeaderboard: boolean
+  voiceSessionIds: [string | null, string | null]
+  onVoiceSessionCreated: (player: PlayerIndex, sessionId: string) => void
   onHome: () => void
   onContinue: () => void
 }) {
@@ -1267,6 +1315,13 @@ function RoundResultScreen({
                     {announcer.coaching[PLAYER_IDS[player]]}
                   </p>
                 )}
+                <VoiceClonePanel
+                  line={line}
+                  songId={state.song.id}
+                  language={state.song.language}
+                  sessionId={voiceSessionIds[player] ?? null}
+                  onSessionCreated={(id) => onVoiceSessionCreated(player, id)}
+                />
               </div>
             )
           })}
@@ -1407,6 +1462,34 @@ export default function App() {
   const shareOnLeaderboardRef = useRef(shareOnLeaderboard)
   shareOnLeaderboardRef.current = shareOnLeaderboard
 
+  // Per-player voice-clone session ids. These are opaque — the real
+  // ElevenLabs voice id stays server-side. Deleted on match end,
+  // rematch, go-home, and when the match leaves the sing/result loop.
+  const [voiceSessionIds, setVoiceSessionIds] =
+    useState<[string | null, string | null]>([null, null])
+  const voiceSessionIdsRef = useRef(voiceSessionIds)
+  voiceSessionIdsRef.current = voiceSessionIds
+
+  const clearVoiceSessions = () => {
+    const current = voiceSessionIdsRef.current
+    setVoiceSessionIds([null, null])
+    for (const id of current) if (id) void deleteVoice(id)
+  }
+
+  const handleVoiceSessionCreated = (player: PlayerIndex, id: string) => {
+    setVoiceSessionIds((prev) => {
+      const next: [string | null, string | null] = [
+        ...prev,
+      ] as [string | null, string | null]
+      // If a prior clone exists for this player (e.g. they recorded again)
+      // delete it on the server before replacing.
+      const old = next[player]
+      if (old && old !== id) void deleteVoice(old)
+      next[player] = id
+      return next
+    })
+  }
+
   const inMatch =
     state.phase === "turnReady" ||
     state.phase === "handover" ||
@@ -1423,6 +1506,18 @@ export default function App() {
 
   useEffect(() => () => sessionRef.current?.close(), [])
 
+  // Belt-and-braces: delete any lingering voice clones if the player
+  // closes the tab. keepalive on the DELETE lets the request land.
+  useEffect(() => {
+    const onUnload = () => {
+      for (const id of voiceSessionIdsRef.current) {
+        if (id) void deleteVoice(id)
+      }
+    }
+    window.addEventListener("pagehide", onUnload)
+    return () => window.removeEventListener("pagehide", onUnload)
+  }, [])
+
   const closeSession = () => {
     sessionRef.current?.close()
     sessionRef.current = null
@@ -1434,12 +1529,14 @@ export default function App() {
       return
     }
     closeSession()
+    clearVoiceSessions()
     dispatch({ type: "GO_HOME" })
   }
 
   const confirmLeave = () => {
     setLeavePromptOpen(false)
     closeSession()
+    clearVoiceSessions()
     dispatch({ type: "GO_HOME" })
   }
 
@@ -1553,6 +1650,8 @@ export default function App() {
             state={state}
             wordsBlobs={wordsBlobsRef.current}
             shareOnLeaderboard={shareOnLeaderboard}
+            voiceSessionIds={voiceSessionIds}
+            onVoiceSessionCreated={handleVoiceSessionCreated}
             onHome={goHome}
             onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}
           />
@@ -1560,9 +1659,13 @@ export default function App() {
         {state.phase === "final" && (
           <FinalScreen
             state={state}
-            onRematch={() => dispatch({ type: "REMATCH" })}
+            onRematch={() => {
+              clearVoiceSessions()
+              dispatch({ type: "REMATCH" })
+            }}
             onHome={() => {
               closeSession()
+              clearVoiceSessions()
               dispatch({ type: "GO_HOME" })
             }}
           />

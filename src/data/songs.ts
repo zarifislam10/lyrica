@@ -1,9 +1,9 @@
 import type { Language, PracticeLine, Song } from "@/domain/types"
 
 export const LINES_PER_SONG = 3
-// Seconds per beat. Slower than a party sing-along so learners have time to
-// shape each syllable.
-export const SECONDS_PER_BEAT = 0.6
+// Seconds per beat. 80 BPM — close to a natural Happy Birthday pace, slow
+// enough that learners have time to shape each syllable.
+export const SECONDS_PER_BEAT = 0.75
 // Silence left at the end of each note so syllables don't run together.
 const ARTICULATION_GAP_SECONDS = 0.06
 
