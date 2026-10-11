@@ -76,9 +76,13 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     if (event.data && event.data.size > 0) chunks.push(event.data)
   }
 
-  // Start as soon as possible; the caller usually calls stop() a few seconds later.
+  // Start with a 1s timeslice. Without one, ondataavailable only fires at
+  // stop(), and in Chrome that final event can hang when another consumer
+  // (our pitch-detection AudioContext) is attached to the same stream.
+  // With a timeslice the recorder keeps pushing buffered chunks, so stop()
+  // sees data immediately and onstop fires reliably.
   try {
-    recorder.start()
+    recorder.start(1000)
   } catch {
     return {
       stop: async () => null,
