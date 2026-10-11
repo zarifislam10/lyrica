@@ -32,13 +32,14 @@ import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
 import { LANGUAGE_NAMES } from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
+import WordsCard from "@/components/WordsCard"
 import {
   createAudioContext,
   sessionFromMic,
   unlockAudio,
   type AudioSession,
 } from "@/services/audioSession"
+import { startWordsCapture, type WordsCapture } from "@/services/words"
 import {
   fetchAnnouncement,
   isFallbackForced,
@@ -613,6 +614,7 @@ function SingScreen({
   getSession,
   onHome,
   onScored,
+  onBlob,
 }: {
   line: PracticeLine
   audioUrl: string
@@ -623,6 +625,7 @@ function SingScreen({
   getSession: () => Promise<AudioSession>
   onHome: () => void
   onScored: (samples: PitchSample[]) => void
+  onBlob: (blob: Blob | null) => void
 }) {
   const [singState, setSingState] = useState<SingState>("ready")
   const [count, setCount] = useState(COUNT_IN_BEATS)
@@ -643,6 +646,9 @@ function SingScreen({
   singStateRef.current = singState
   const onScoredRef = useRef(onScored)
   onScoredRef.current = onScored
+  const onBlobRef = useRef(onBlob)
+  onBlobRef.current = onBlob
+  const wordsCaptureRef = useRef<WordsCapture | null>(null)
 
   // Stops this take only; the match keeps the mic stream open.
   const cleanup = () => {
@@ -651,6 +657,8 @@ function SingScreen({
     detectorRef.current?.stop()
     detectorRef.current = null
     audioCtxRef.current = null
+    wordsCaptureRef.current?.dispose()
+    wordsCaptureRef.current = null
   }
 
   useEffect(() => cleanup, [])
@@ -742,6 +750,10 @@ function SingScreen({
     const ctx = session.ctx
     audioCtxRef.current = ctx
 
+    // Record the turn's audio alongside pitch detection. Any failure is
+    // swallowed inside the service; the Words card falls back to "unavailable".
+    wordsCaptureRef.current = startWordsCapture(session.stream)
+
     const detector = createPitchDetector({
       ctx,
       stream: session.stream,
@@ -784,14 +796,28 @@ function SingScreen({
             finalSamples.length,
             detector.framesAnalyzed(),
           )
-          cleanup()
+          // Hand off the Words capture before cleanup() disposes it. The blob
+          // is awaited so the ref is populated before TURN_SCORED dispatches,
+          // guaranteeing the RoundResult screen sees it on first paint.
+          const capture = wordsCaptureRef.current
+          wordsCaptureRef.current = null
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = 0
+          detectorRef.current?.stop()
+          detectorRef.current = null
+          audioCtxRef.current = null
           if (unclear) {
+            capture?.dispose()
             setSingState("ready")
             setProgress(0)
             setLiveSamples([])
             setError("unclear")
           } else {
-            onScoredRef.current(finalSamples)
+            const settle = capture ? capture.stop() : Promise.resolve(null)
+            void settle.then((blob) => {
+              onBlobRef.current(blob)
+              onScoredRef.current(finalSamples)
+            })
           }
           return
         }
@@ -1108,11 +1134,13 @@ function useAnnouncement(state: MatchState, shareOnLeaderboard: boolean) {
 
 function RoundResultScreen({
   state,
+  wordsBlobs,
   shareOnLeaderboard,
   onHome,
   onContinue,
 }: {
   state: MatchState
+  wordsBlobs: (Blob | null)[]
   shareOnLeaderboard: boolean
   onHome: () => void
   onContinue: () => void
@@ -1156,13 +1184,12 @@ function RoundResultScreen({
                   />
                   {displayName(state, player)}
                 </span>
-                <div className="score-slots">
-                  <div className="score-slot">
-                    <small>Tune</small>
-                    <strong>{state.turnScores[player] ?? 0}</strong>
-                  </div>
-                  <WordsComingSoon />
-                </div>
+                <WordsCard
+                  tune={state.turnScores[player] ?? 0}
+                  wav={wordsBlobs[player] ?? null}
+                  songId={state.song.id}
+                  lineId={line.id}
+                />
                 <p>{coach.body}</p>
                 {announcer.coaching[PLAYER_IDS[player]] && (
                   <p className="coach-tip">
@@ -1300,6 +1327,9 @@ export default function App() {
     createMatchState(loadStoredNames()),
   )
   const sessionRef = useRef<AudioSession | null>(null)
+  // The WAV for each player's most recent turn. Written when the recorder
+  // stops, read by the WordsCard rendered inside RoundResultScreen.
+  const wordsBlobsRef = useRef<(Blob | null)[]>([null, null])
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
   // Leaderboard opt-in. Not in match reducer: it only affects what we send to
   // the backend, not match flow, so it stays in App state and resets on reload.
@@ -1434,6 +1464,9 @@ export default function App() {
                 samples,
               })
             }}
+            onBlob={(blob) => {
+              wordsBlobsRef.current[player] = blob
+            }}
           />
         )}
         {state.phase === "handover" && (
@@ -1445,6 +1478,7 @@ export default function App() {
         {state.phase === "roundResult" && (
           <RoundResultScreen
             state={state}
+            wordsBlobs={wordsBlobsRef.current}
             shareOnLeaderboard={shareOnLeaderboard}
             onHome={goHome}
             onContinue={() => dispatch({ type: "ROUND_CONTINUE" })}

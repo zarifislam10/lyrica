@@ -5,9 +5,9 @@ import {
   displayName,
   soloTotal,
 } from "@/domain/match"
+import WordsCard from "@/components/WordsCard"
 import LeaderboardPanel from "@/screens/LeaderboardPanel"
 import SongTag from "@/screens/SongTag"
-import WordsComingSoon from "@/screens/WordsComingSoon"
 
 function SoloFinal({ state }: { state: MatchState }) {
   return (
@@ -15,13 +15,15 @@ function SoloFinal({ state }: { state: MatchState }) {
       <p className="player-chip" style={{ color: PLAYER_COLORS[0] }}>
         {displayName(state, 0)}
       </p>
-      <div className="score-slots final-score-slots">
-        <div className="score-slot">
-          <small>Tune</small>
-          <strong>{soloTotal(state)}</strong>
-        </div>
-        <WordsComingSoon />
-      </div>
+      {/* Final-screen Words bar is intentionally wav={null} — per-round
+       takes aren't aggregated, so we show the Tune total alongside an
+       honest "Unavailable" word score rather than inventing a number. */}
+      <WordsCard
+        tune={soloTotal(state)}
+        wav={null}
+        songId={state.song.id}
+        lineId={0}
+      />
       {state.soloScores.length > 1 && (
         <div className="solo-rounds">
           {state.soloScores.map((score, index) => (
