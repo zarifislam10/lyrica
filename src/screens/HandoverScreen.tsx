@@ -1,4 +1,5 @@
 import { PLAYER_COLORS, type MatchState, displayName } from "@/domain/match"
+import SongTag, { SongTitle } from "@/screens/SongTag"
 
 export default function HandoverScreen({
   state,
@@ -20,10 +21,12 @@ export default function HandoverScreen({
           />
           Round {state.round}
         </p>
+        <SongTag song={state.song} />
         <h1>Pass the mic to {displayName(state, next)}</h1>
         <p className="handover-copy">
-          {displayName(state, previous)} is done. Keep that score hidden until
-          both of you have sung.
+          {displayName(state, previous)} just sang line {state.round} of{" "}
+          <SongTitle song={state.song} />. Keep that score hidden until both of
+          you have sung.
         </p>
         <button type="button" onClick={onContinue}>
           {displayName(state, next)} is ready

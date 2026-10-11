@@ -30,6 +30,7 @@ import type { Language, PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
+import { LANGUAGE_NAMES } from "@/screens/SongTag"
 import WordsComingSoon from "@/screens/WordsComingSoon"
 import {
   createAudioContext,
@@ -507,12 +508,6 @@ function ModeScreen({
       </section>
     </main>
   )
-}
-
-const LANGUAGE_NAMES: Record<Language, string> = {
-  en: "English",
-  ko: "Korean",
-  ar: "Arabic",
 }
 
 function SongScreen({
