@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 
+import { songs } from "@/data/songs"
+
 import {
   createMatchState,
   displayName,
+  lineForRound,
   matchReducer,
   normalizeName,
   soloTotal,
@@ -128,13 +131,72 @@ describe("matchReducer", () => {
     expect(displayName(state, 1)).toBe("Ava 2")
   })
 
-  it("goes home → mode → setup with the chosen mode", () => {
+  it("goes home → mode → song → setup with the chosen mode", () => {
     const picking = matchReducer(createMatchState(), { type: "GO_MODE" })
     expect(picking.phase).toBe("mode")
-    const setup = matchReducer(picking, { type: "CHOOSE_MODE", mode: "solo" })
+    const choosing = matchReducer(picking, {
+      type: "CHOOSE_MODE",
+      mode: "solo",
+    })
+    expect(choosing.phase).toBe("song")
+    expect(choosing.mode).toBe("solo")
+    const setup = matchReducer(choosing, {
+      type: "SELECT_SONG",
+      songId: "happy-birthday-ko",
+    })
     expect(setup.phase).toBe("setup")
-    expect(setup.mode).toBe("solo")
     expect(matchReducer(setup, { type: "START_MATCH" }).mode).toBe("solo")
+  })
+})
+
+describe("song selection", () => {
+  const arabic = songs.find((s) => s.language === "ar")!
+
+  function chosen(songId: string) {
+    const choosing = matchReducer(createMatchState(["Ava", "Sam"]), {
+      type: "CHOOSE_MODE",
+      mode: "battle",
+    })
+    return matchReducer(choosing, { type: "SELECT_SONG", songId })
+  }
+
+  it("defaults to the first song", () => {
+    expect(createMatchState().song).toBe(songs[0])
+  })
+
+  it("sets the chosen song and moves on to setup", () => {
+    const state = chosen(arabic.id)
+    expect(state.song).toBe(arabic)
+    expect(state.phase).toBe("setup")
+  })
+
+  it("ignores an unknown song id", () => {
+    const choosing = matchReducer(createMatchState(), {
+      type: "CHOOSE_MODE",
+      mode: "battle",
+    })
+    expect(
+      matchReducer(choosing, { type: "SELECT_SONG", songId: "nope" }),
+    ).toBe(choosing)
+  })
+
+  it("sings the song's line for each round", () => {
+    let state = matchReducer(chosen(arabic.id), { type: "START_MATCH" })
+    expect(state.song).toBe(arabic)
+    expect(lineForRound(state)).toBe(arabic.lines[0])
+    state = playRound(state, turn(90), turn(40))
+    state = matchReducer(state, { type: "ROUND_CONTINUE" })
+    expect(state.round).toBe(2)
+    expect(lineForRound(state)).toBe(arabic.lines[1])
+  })
+
+  it("keeps the song through a rematch and going home", () => {
+    let state = matchReducer(chosen(arabic.id), { type: "START_MATCH" })
+    state = matchReducer(state, { type: "REMATCH" })
+    expect(state.song).toBe(arabic)
+    state = matchReducer(state, { type: "GO_HOME" })
+    expect(state.phase).toBe("home")
+    expect(state.song).toBe(arabic)
   })
 })
 

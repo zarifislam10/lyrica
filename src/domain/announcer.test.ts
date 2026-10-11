@@ -32,8 +32,8 @@ describe("buildRoundResultPayload", () => {
       round: 1,
       lineId: "1",
       players: [
-        { id: "p1", name: "Ava", score: 82, missedSyllables: ["하"] },
-        { id: "p2", name: "Sam", score: 74, missedSyllables: ["녕", "하"] },
+        { id: "p1", name: "Ava", score: 82, missedSyllables: ["birth"] },
+        { id: "p2", name: "Sam", score: 74, missedSyllables: ["py", "birth"] },
       ],
       winnerId: "p1",
     })

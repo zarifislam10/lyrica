@@ -142,7 +142,7 @@ All of the above must pass. If `pnpm format` rewrites a file, re-run `tsc`; the 
 - One-device battle loop (`src/domain/match.ts`, `src/screens/`, `src/services/audioSession.ts`) — PR #5.
 
 **In flight:**
-- `laiba-songs`: `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, melody typed once as semitones. `Syllable`/`PracticeLine` now use `text`/`romanization` for every language. Not yet done: `song` in match state, song picker, switching the app off `lines.ts`.
+- `laiba-songs`: the app sings `src/data/songs.ts` — Happy Birthday in English, Korean, and Arabic, melody typed once as semitones. Flow is home → mode → song picker → setup; `state.song` holds the choice and `lineForRound(state)` reads its lines. `src/data/lines.ts` is now a fixture for `scoring.test.ts` only. Not yet done: ElevenLabs "Hear it" clips.
 - `zarif-ml`: standalone wav2vec2 + DTW probe under `/ml`. Must-tier item; blocks the Words score shipping to the UI.
 
 ## Current task owners

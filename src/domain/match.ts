@@ -1,5 +1,5 @@
-import { practiceLines } from "@/data/lines"
-import type { PitchSample, PracticeLine } from "@/domain/types"
+import { songs } from "@/data/songs"
+import type { PitchSample, PracticeLine, Song } from "@/domain/types"
 
 export const NAMES_STORAGE_KEY = "lyrica.playerNames"
 export const MAX_NAME_LENGTH = 12
@@ -7,7 +7,7 @@ export const MAX_NAME_LENGTH = 12
 // or that syllable can't be sung in time and is always scored as missed.
 export const TURN_SECONDS = 4
 
-export type MatchPhase = "home" | "mode" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
+export type MatchPhase = "home" | "mode" | "song" | "setup" | "turnReady" | "handover" | "roundResult" | "final"
 
 export type GameMode = "solo" | "battle"
 
@@ -17,6 +17,8 @@ export type RoundNumber = 1 | 2 | 3
 export type MatchState = {
   phase: MatchPhase
   mode: GameMode
+  // The song being sung; each round sings its next line.
+  song: Song
   names: [string, string]
   round: RoundNumber
   openingSinger: PlayerIndex
@@ -37,6 +39,9 @@ export type MatchState = {
 export type MatchAction = { type: "GO_MODE" } | {
   type: "CHOOSE_MODE"
   mode: GameMode
+} | {
+  type: "SELECT_SONG"
+  songId: string
 } | {
   type: "SET_NAME"
   player: PlayerIndex
@@ -93,17 +98,19 @@ export function displayName(state: MatchState, player: PlayerIndex): string {
   return state.names[player]
 }
 
-export function lineForRound(round: RoundNumber): PracticeLine {
-  return practiceLines[round - 1] ?? practiceLines[0]
+export function lineForRound(state: MatchState): PracticeLine {
+  return state.song.lines[state.round - 1] ?? state.song.lines[0]
 }
 
 export function createMatchState(
   names: [string, string] = ["", ""],
   mode: GameMode = "battle",
+  song: Song = songs[0],
 ): MatchState {
   return {
     phase: "home",
     mode,
+    song,
     names,
     round: 1,
     openingSinger: 0,
@@ -221,7 +228,12 @@ export function matchReducer(
     case "GO_MODE":
       return { ...state, phase: "mode" }
     case "CHOOSE_MODE":
-      return { ...state, phase: "setup", mode: action.mode }
+      return { ...state, phase: "song", mode: action.mode }
+    case "SELECT_SONG": {
+      const song = songs.find((s) => s.id === action.songId)
+      if (!song) return state
+      return { ...state, phase: "setup", song }
+    }
     case "SET_NAME": {
       const names: [string, string] = [...state.names]
       names[action.player] = action.name.slice(0, MAX_NAME_LENGTH)
@@ -234,7 +246,7 @@ export function matchReducer(
       ]
       persistNames(state.names)
       return {
-        ...createMatchState(names, state.mode),
+        ...createMatchState(names, state.mode, state.song),
         phase: "turnReady",
         firstSinger: 0,
         currentPlayer: 0,
@@ -266,7 +278,7 @@ export function matchReducer(
       const opener =
         state.mode === "solo" ? 0 : otherPlayer(state.openingSinger)
       return {
-        ...createMatchState(state.names, state.mode),
+        ...createMatchState(state.names, state.mode, state.song),
         phase: "turnReady",
         openingSinger: opener,
         firstSinger: opener,
@@ -274,7 +286,11 @@ export function matchReducer(
       }
     }
     case "GO_HOME":
-      return { ...createMatchState(state.names), phase: "home" }
+      // Keep the last song so the picker starts on it next time.
+      return {
+        ...createMatchState(state.names, "battle", state.song),
+        phase: "home",
+      }
     default:
       return state
   }

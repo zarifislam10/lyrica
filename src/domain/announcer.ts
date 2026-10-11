@@ -18,7 +18,7 @@ const PLAYER_IDS = ["p1", "p2"] as const
 
 /** Builds the body for `POST /round-result` from a finished round. */
 export function buildRoundResultPayload(state: MatchState): RoundResultPayload {
-  const line = lineForRound(state.round)
+  const line = lineForRound(state)
   const player = (index: 0 | 1): RoundResultPlayer => ({
     id: PLAYER_IDS[index],
     name: displayName(state, index),

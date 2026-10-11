@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react"
 
-import { practiceLines } from "@/data/lines"
+import { songs } from "@/data/songs"
 import {
   PLAYER_COLORS,
   TURN_SECONDS,
@@ -19,7 +26,7 @@ import { buildRoundResultPayload } from "@/domain/announcer"
 import { syllableDisplayTexts } from "@/domain/lyrics"
 import { isUnclearTake } from "@/domain/clarity"
 import { scoreTurn, timeWeightedMedianPitch } from "@/domain/scoring"
-import type { PitchSample, PracticeLine } from "@/domain/types"
+import type { Language, PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
@@ -222,18 +229,25 @@ function Brand({ onHome }: { onHome?: () => void }) {
 
 function LyricSyllables({
   line,
+  language,
   activeIndex = -1,
   result = false,
   missed = [],
 }: {
   line: PracticeLine
+  language: Language
   activeIndex?: number
   result?: boolean
   missed?: number[]
 }) {
   const texts = syllableDisplayTexts(line)
   return (
-    <div className={`lyric-grid ${line.syllables.length === 4 ? "four" : ""}`}>
+    <div
+      className="lyric-grid"
+      lang={language}
+      dir={language === "ar" ? "rtl" : "ltr"}
+      style={{ "--syllable-count": line.syllables.length } as CSSProperties}
+    >
       {line.syllables.map((syllable, index) => {
         const isMissed = missed.includes(index)
         return (
@@ -381,7 +395,7 @@ function PitchLane({
       )}
       <div className="lane-time">
         <span>0:00</span>
-        <span>0:04</span>
+        <span>0:{String(DURATION).padStart(2, "0")}</span>
       </div>
     </div>
   )
@@ -415,8 +429,8 @@ function ScreenHeader({
           ) : null}
         </span>
         <div className="progress-dots" aria-label={`Round ${round} of 3`}>
-          {practiceLines.map((item) => (
-            <i className={item.id === round ? "active" : ""} key={item.id} />
+          {[1, 2, 3].map((item) => (
+            <i className={item === round ? "active" : ""} key={item} />
           ))}
         </div>
       </div>
@@ -476,6 +490,59 @@ function ModeScreen({
   )
 }
 
+const LANGUAGE_NAMES: Record<Language, string> = {
+  en: "English",
+  ko: "Korean",
+  ar: "Arabic",
+}
+
+function SongScreen({
+  selectedId,
+  onChoose,
+  onHome,
+}: {
+  selectedId: string
+  onChoose: (songId: string) => void
+  onHome: () => void
+}) {
+  return (
+    <main className="screen setup-screen">
+      <CornerDots />
+      <header className="screen-header">
+        <Brand onHome={onHome} />
+      </header>
+      <section className="setup-content">
+        <h1>Pick a language to sing in</h1>
+        <div className="mode-options">
+          {songs.map((song) => (
+            <button
+              className={`mode-card ${
+                song.id === selectedId ? "selected" : ""
+              }`}
+              type="button"
+              key={song.id}
+              aria-pressed={song.id === selectedId}
+              onClick={() => onChoose(song.id)}
+            >
+              <strong>{LANGUAGE_NAMES[song.language]}</strong>
+              <span
+                className="song-title"
+                lang={song.language}
+                dir={song.language === "ar" ? "rtl" : "ltr"}
+              >
+                {song.lines[0].text}
+              </span>
+              {song.lines[0].romanization && (
+                <span>{song.lines[0].romanization}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  )
+}
+
 function HomeScreen({ onStart }: { onStart: () => void }) {
   return (
     <main className="screen home-screen">
@@ -519,6 +586,7 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
 
 function SingScreen({
   line,
+  language,
   round,
   playerLabel,
   playerColor,
@@ -527,6 +595,7 @@ function SingScreen({
   onScored,
 }: {
   line: PracticeLine
+  language: Language
   round: 1 | 2 | 3
   playerLabel: string
   playerColor: string
@@ -742,7 +811,11 @@ function SingScreen({
           </button>
         </div>
 
-        <LyricSyllables line={line} activeIndex={activeIndex} />
+        <LyricSyllables
+          line={line}
+          language={language}
+          activeIndex={activeIndex}
+        />
 
         <PitchLane
           line={line}
@@ -940,7 +1013,7 @@ function RoundResultScreen({
   onHome: () => void
   onContinue: () => void
 }) {
-  const line = lineForRound(state.round)
+  const line = lineForRound(state)
   const winner = state.roundWinner
   const matchOver = isMatchOver(state)
   const announcer = useAnnouncement(state)
@@ -1012,6 +1085,7 @@ function RoundResultScreen({
             )}
             <LyricSyllables
               line={line}
+              language={state.song.language}
               result
               missed={state.turnMissed[player]}
             />
@@ -1130,7 +1204,7 @@ export default function App() {
     return session
   }
 
-  const line = lineForRound(state.round)
+  const line = lineForRound(state)
   const player = state.currentPlayer
 
   return (
@@ -1142,6 +1216,13 @@ export default function App() {
         {state.phase === "mode" && (
           <ModeScreen
             onChoose={(mode) => dispatch({ type: "CHOOSE_MODE", mode })}
+            onHome={goHome}
+          />
+        )}
+        {state.phase === "song" && (
+          <SongScreen
+            selectedId={state.song.id}
+            onChoose={(songId) => dispatch({ type: "SELECT_SONG", songId })}
             onHome={goHome}
           />
         )}
@@ -1166,6 +1247,7 @@ export default function App() {
           <SingScreen
             key={`${state.round}-${player}-${state.replays}`}
             line={line}
+            language={state.song.language}
             round={state.round}
             playerLabel={displayName(state, player)}
             playerColor={PLAYER_COLORS[player]}

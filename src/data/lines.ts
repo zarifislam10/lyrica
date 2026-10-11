@@ -1,3 +1,4 @@
+// Fixture for scoring.test.ts only. The app sings src/data/songs.ts.
 import type { PracticeLine } from "@/domain/types"
 
 export const practiceLines: PracticeLine[] = [
