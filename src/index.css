@@ -701,6 +701,24 @@ button:focus-visible {
   stroke-width: 1.4;
 }
 
+.guide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+  font-size: 13px;
+  color: #c9c9d1;
+  user-select: none;
+}
+.guide-toggle input {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+.guide-toggle input:disabled + span {
+  opacity: 0.5;
+}
+
 .lyric-grid {
   --pad-x: 12px;
   --gap: 5px;

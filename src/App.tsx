@@ -51,6 +51,13 @@ import {
   setFallbackForced,
 } from "@/services/announcer"
 import { MicrophoneError, requestMicrophone } from "@/services/microphone"
+import {
+  playBeatTrack,
+  playCountIn,
+  playGuideWithBeat,
+  playLine as playMelodyLine,
+  stopAll as stopAllMelody,
+} from "@/services/melody"
 import { createPitchDetector } from "@/services/pitch"
 
 type SingState = "ready" | "starting" | "counting" | "recording"
@@ -669,6 +676,10 @@ function SingScreen({
   const [error, setError] = useState<ErrorKind>(null)
   const [referencePlaying, setReferencePlaying] = useState(false)
   const [clipFailed, setClipFailed] = useState(false)
+  // Opt-in: the mic hears the pitched melody and it corrupts both the Tune
+  // score and the Words model, so this is off by default and labelled
+  // headphones-only in the UI.
+  const [guideWhileSinging, setGuideWhileSinging] = useState(false)
 
   const referenceRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -694,6 +705,7 @@ function SingScreen({
     audioCtxRef.current = null
     wordsCaptureRef.current?.dispose()
     wordsCaptureRef.current = null
+    stopAllMelody()
   }
 
   useEffect(() => cleanup, [])
@@ -707,6 +719,7 @@ function SingScreen({
       audio.pause()
       audio.currentTime = clipStart
     }
+    stopAllMelody()
     setReferencePlaying(false)
   }
 
@@ -719,7 +732,10 @@ function SingScreen({
     }
     audio.currentTime = clipStart
     setReferencePlaying(true)
+    // Melody plays alongside the spoken clip so Hear it carries the tune too.
+    playMelodyLine(line)
     audio.play().catch((err: unknown) => {
+      stopAllMelody()
       setReferencePlaying(false)
       if (err instanceof DOMException && err.name === "NotSupportedError") {
         setClipFailed(true)
@@ -806,7 +822,13 @@ function SingScreen({
     setCount(COUNT_IN_BEATS)
     setSingState("counting")
 
+    // Pitched count-in gives the player the starting note and the tempo.
+    // Scheduled against melody's own ctx (relative to its own now), so a
+    // small clock-drift from the mic ctx doesn't matter here.
+    playCountIn(line, COUNT_IN_BEATS, COUNT_IN_INTERVAL)
+
     let hasStartedRecording = false
+    let beatsScheduled = false
 
     const loop = () => {
       const ctxNow = audioCtxRef.current
@@ -816,6 +838,16 @@ function SingScreen({
         const remaining = recordStart - now
         const nextCount = Math.max(1, Math.ceil(remaining / COUNT_IN_INTERVAL))
         setCount(nextCount)
+        if (!beatsScheduled && remaining < 0.08) {
+          // Schedule once right before record-start. Beat ticks only by
+          // default; pitched melody only if the player opted in.
+          beatsScheduled = true
+          if (guideWhileSinging) {
+            playGuideWithBeat(line, remaining, SECONDS_PER_BEAT)
+          } else {
+            playBeatTrack(line, remaining, SECONDS_PER_BEAT)
+          }
+        }
       } else {
         if (!hasStartedRecording) {
           hasStartedRecording = true
@@ -968,6 +1000,16 @@ function SingScreen({
             }}
           />
         </div>
+
+        <label className="guide-toggle">
+          <input
+            type="checkbox"
+            checked={guideWhileSinging}
+            onChange={(e) => setGuideWhileSinging(e.target.checked)}
+            disabled={singState !== "ready"}
+          />
+          <span>Guide melody while singing (headphones only)</span>
+        </label>
 
         <LyricSyllables
           line={line}
