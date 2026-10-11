@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react"
 
 import { practiceLines } from "@/data/lines"
 import {
@@ -21,6 +28,7 @@ import type { PitchSample, PracticeLine } from "@/domain/types"
 import SetupScreen from "@/screens/SetupScreen"
 import HandoverScreen from "@/screens/HandoverScreen"
 import FinalScreen from "@/screens/FinalScreen"
+import WordsComingSoon from "@/screens/WordsComingSoon"
 import {
   createAudioContext,
   sessionFromMic,
@@ -978,7 +986,11 @@ function RoundResultScreen({
                   winner === player ? "winner" : ""
                 }`}
                 key={player}
+                style={{ "--player": PLAYER_COLORS[player] } as CSSProperties}
               >
+                {winner === player && (
+                  <span className="winner-badge">✦ Round winner</span>
+                )}
                 <span
                   className="player-chip"
                   style={{ color: PLAYER_COLORS[player] }}
@@ -989,14 +1001,37 @@ function RoundResultScreen({
                   />
                   {displayName(state, player)}
                 </span>
-                <strong>{state.turnScores[player] ?? 0}</strong>
+                <div className="score-slots">
+                  <div className="score-slot">
+                    <small>Tune</small>
+                    <strong>{state.turnScores[player] ?? 0}</strong>
+                  </div>
+                  <WordsComingSoon />
+                </div>
                 <p>{coach.body}</p>
               </div>
             )
           })}
         </div>
 
-        <div className="announcer" aria-live="polite">
+        <div
+          className="announcer"
+          aria-live="polite"
+          style={
+            {
+              "--player": PLAYER_COLORS[winner ?? 0],
+            } as CSSProperties
+          }
+        >
+          <span className="announcer-label">
+            <i className="announcer-bars" aria-hidden="true">
+              <b />
+              <b />
+              <b />
+              <b />
+            </i>
+            Announcer
+          </span>
           <p className="commentary-line">
             {announcer.commentary ?? fallbackCommentary(state)}
           </p>
