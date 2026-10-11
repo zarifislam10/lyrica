@@ -24,5 +24,7 @@ logs/
 
 !.env.example
 backend/.venv/
+ml/.venv/
+ml/takes/
 __pycache__/
 *.pyc
