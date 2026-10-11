@@ -13,6 +13,36 @@ export function syllableFill(syllables: Syllable[], time: number): number[] {
   })
 }
 
+export type BallPosition = {
+  // Fractional syllable index: 2 sits on the third syllable, 2.5 is halfway
+  // to the fourth.
+  slot: number
+  // Height of the hop, 0 (touching the syllable) to 1 (top of the arc).
+  lift: number
+}
+
+/**
+ * Where the bouncing ball is at `time` seconds into the take. It lands on
+ * each syllable at the moment that syllable starts, so it hops on the
+ * melody's beat, and rests on the last syllable once it's reached.
+ */
+export function bouncingBall(
+  syllables: Syllable[],
+  time: number,
+): BallPosition {
+  const last = syllables.length - 1
+  if (last < 0 || time <= syllables[0].start) return { slot: 0, lift: 0 }
+  for (let i = 0; i < last; i += 1) {
+    const from = syllables[i].start
+    const to = syllables[i + 1].start
+    if (time < to) {
+      const progress = to > from ? (time - from) / (to - from) : 1
+      return { slot: i + progress, lift: 4 * progress * (1 - progress) }
+    }
+  }
+  return { slot: last, lift: 0 }
+}
+
 const ZERO_WIDTH_JOINER = "\u200d"
 // Harakat, tanween, sukun and the dagger alif: marks that sit on a letter and
 // don't affect how it joins.

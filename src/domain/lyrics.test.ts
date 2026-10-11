@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import { songs } from "@/data/songs"
-import { syllableDisplayTexts, syllableFill } from "@/domain/lyrics"
+import {
+  bouncingBall,
+  syllableDisplayTexts,
+  syllableFill,
+} from "@/domain/lyrics"
 import type { PracticeLine, Syllable } from "@/domain/types"
 
 const ZWJ = "\u200d"
@@ -78,5 +82,35 @@ describe("syllableFill", () => {
 
   it("fills everything once the line is over", () => {
     expect(syllableFill(syllables, 10)).toEqual([1, 1, 1])
+  })
+})
+
+describe("bouncingBall", () => {
+  const syllables: Syllable[] = [
+    { text: "Hap", start: 0, end: 0.9, semitones: 0 },
+    { text: "py", start: 1, end: 1.9, semitones: 0 },
+    { text: "birth", start: 3, end: 3.5, semitones: 0 },
+  ]
+
+  it("rests on the first syllable before the line starts", () => {
+    expect(bouncingBall(syllables, -1)).toEqual({ slot: 0, lift: 0 })
+  })
+
+  it("lands on each syllable exactly when it starts", () => {
+    expect(bouncingBall(syllables, 1)).toEqual({ slot: 1, lift: 0 })
+    expect(bouncingBall(syllables, 3)).toEqual({ slot: 2, lift: 0 })
+  })
+
+  it("is at the top of the arc halfway between two syllables", () => {
+    expect(bouncingBall(syllables, 0.5)).toEqual({ slot: 0.5, lift: 1 })
+    expect(bouncingBall(syllables, 2)).toEqual({ slot: 1.5, lift: 1 })
+  })
+
+  it("stays on the last syllable once it is reached", () => {
+    expect(bouncingBall(syllables, 9)).toEqual({ slot: 2, lift: 0 })
+  })
+
+  it("handles an empty line", () => {
+    expect(bouncingBall([], 1)).toEqual({ slot: 0, lift: 0 })
   })
 })

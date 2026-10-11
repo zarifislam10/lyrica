@@ -694,11 +694,14 @@ button:focus-visible {
 }
 
 .lyric-grid {
+  --pad-x: 12px;
+  --gap: 5px;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--syllable-count, 5), minmax(0, 1fr));
-  gap: 5px;
+  gap: var(--gap);
   margin: 30px 0 14px;
-  padding: 17px 12px;
+  padding: 17px var(--pad-x);
   border: 1px solid #2b1f30;
   border-radius: 18px;
   background: #130e17;
@@ -767,6 +770,49 @@ button:focus-visible {
     var(--lit, #ff4fa3) var(--fill, 0%),
     #5f4f66 var(--fill, 0%)
   );
+}
+
+/* Bouncing ball: hops from syllable to syllable, landing on each one as it
+   starts. --slot is a fractional syllable index, --lift the hop height. */
+.lyric-grid.with-ball {
+  padding-top: 46px;
+}
+
+.lyric-ball {
+  --cell: calc(
+    (100% - 2 * var(--pad-x) - (var(--syllable-count) - 1) * var(--gap)) /
+      var(--syllable-count)
+  );
+  position: absolute;
+  top: 22px;
+  left: calc(
+    var(--pad-x) + var(--cell) / 2 + var(--slot, 0) * (var(--cell) + var(--gap))
+  );
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lit, #ff4fa3);
+  box-shadow: 0 0 14px var(--lit, #ff4fa3);
+  transform: translate(-50%, calc(var(--lift, 0) * -18px));
+  pointer-events: none;
+}
+
+.lyric-grid[dir="rtl"] .lyric-ball {
+  right: calc(
+    var(--pad-x) + var(--cell) / 2 + var(--slot, 0) * (var(--cell) + var(--gap))
+  );
+  left: auto;
+  transform: translate(50%, calc(var(--lift, 0) * -18px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyric-ball {
+    transform: translate(-50%, 0);
+  }
+
+  .lyric-grid[dir="rtl"] .lyric-ball {
+    transform: translate(50%, 0);
+  }
 }
 
 .next-line {
@@ -1451,7 +1497,12 @@ button:focus-visible {
   }
 
   .lyric-grid {
-    padding: 14px 5px;
+    --pad-x: 5px;
+    padding: 14px var(--pad-x);
+  }
+
+  .lyric-grid.with-ball {
+    padding-top: 40px;
   }
 
   .syllable .hangul {
