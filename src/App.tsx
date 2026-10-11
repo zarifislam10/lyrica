@@ -504,6 +504,9 @@ function HomeScreen({ onStart }: { onStart: () => void }) {
           <span aria-hidden="true">Lyr</span>
           <i aria-hidden="true" />
           <span aria-hidden="true">ca</span>
+          <span className="home-mic" aria-hidden="true">
+            <img src="/mic.png" alt="" />
+          </span>
         </h1>
         <p>Learn a language by singing it.</p>
         <p className="home-subline">Sing it. Say it right. Win the round.</p>
