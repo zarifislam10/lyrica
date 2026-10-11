@@ -746,6 +746,59 @@ button:focus-visible {
   color: #fff;
 }
 
+/* While singing, colour sweeps through each syllable as it's sung: sung
+   syllables stay lit in the player's colour, upcoming ones stay dim. */
+.lyric-grid.singing .syllable .hangul,
+.lyric-grid.singing .syllable .roman {
+  color: transparent;
+  background-image: linear-gradient(
+    to right,
+    var(--lit, #ff4fa3) var(--fill, 0%),
+    #5f4f66 var(--fill, 0%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.lyric-grid.singing[dir="rtl"] .syllable .hangul,
+.lyric-grid.singing[dir="rtl"] .syllable .roman {
+  background-image: linear-gradient(
+    to left,
+    var(--lit, #ff4fa3) var(--fill, 0%),
+    #5f4f66 var(--fill, 0%)
+  );
+}
+
+.next-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+  color: #9d8ca4;
+  text-align: center;
+}
+
+.next-line-label {
+  font-family: "Syne", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.next-line-text {
+  color: #c4b5c9;
+  font-family: "Noto Sans KR", "Noto Sans Arabic", sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.next-line-roman {
+  font-size: 13px;
+}
+
 .syllable.matched {
   color: #19b5ff;
 }
@@ -1036,7 +1089,23 @@ button:focus-visible {
   font-weight: 800;
   line-height: 1;
   letter-spacing: -10px;
-  animation: countPop 650ms ease both;
+  animation: countPop var(--beat, 650ms) ease both;
+}
+
+.count-beat {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.count-ring {
+  position: absolute;
+  width: clamp(170px, 26vw, 290px);
+  aspect-ratio: 1;
+  border: 2px solid #ff4fa3;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: beatRing var(--beat, 650ms) ease-out both;
 }
 
 .count-overlay small {
@@ -1268,6 +1337,11 @@ button:focus-visible {
   0% { opacity: 0; transform: scale(0.7); }
   35% { opacity: 1; transform: scale(1.05); }
   100% { opacity: 0.94; transform: scale(1); }
+}
+
+@keyframes beatRing {
+  0% { opacity: 0.9; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(1.15); }
 }
 
 @keyframes pulse {

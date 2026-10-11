@@ -1,4 +1,17 @@
-import type { PracticeLine } from "@/domain/types"
+import type { PracticeLine, Syllable } from "@/domain/types"
+
+/**
+ * How much of each syllable has been sung at `time` seconds into the take:
+ * 0 before it starts, 1 once it ends, and the fraction in between. Drives the
+ * colour sweep, so sung syllables stay lit and upcoming ones stay dim.
+ */
+export function syllableFill(syllables: Syllable[], time: number): number[] {
+  return syllables.map(({ start, end }) => {
+    if (time <= start) return 0
+    if (time >= end) return 1
+    return (time - start) / (end - start)
+  })
+}
 
 const ZERO_WIDTH_JOINER = "\u200d"
 // Harakat, tanween, sukun and the dagger alif: marks that sit on a letter and
