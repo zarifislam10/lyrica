@@ -1828,6 +1828,25 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.announcer-error {
+  display: grid;
+  gap: 6px;
+  max-width: 46ch;
+  padding: 10px 14px;
+  border: 1px solid #ff9a3d;
+  color: #ffd9b8;
+  background: rgb(255 154 61 / 0.1);
+  font-size: 12px;
+  text-align: left;
+}
+
+.announcer-error ul {
+  margin: 0;
+  padding-left: 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
 .announcer-play {
   display: inline-flex;
   align-items: center;
