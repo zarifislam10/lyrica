@@ -14,6 +14,12 @@ export type GameMode = "solo" | "battle"
 export type PlayerIndex = 0 | 1
 export type RoundNumber = 1 | 2 | 3
 
+// One round keeps the demo short. Raise to 3 for best of three; every
+// screen and the end-of-match check follow this number.
+export const ROUNDS_PER_MATCH: RoundNumber = 1
+// A majority of rounds wins a battle early (2 of 3, or 1 of 1).
+const WINS_NEEDED = Math.floor(ROUNDS_PER_MATCH / 2) + 1
+
 export type MatchState = {
   phase: MatchPhase
   mode: GameMode
@@ -164,8 +170,9 @@ function afterBothSung(state: MatchState): MatchState {
 }
 
 export function isMatchOver(state: MatchState): boolean {
-  if (state.mode === "solo") return state.round === 3
-  return state.roundWins[0] >= 2 || state.roundWins[1] >= 2 || state.round === 3
+  if (state.round >= ROUNDS_PER_MATCH) return true
+  if (state.mode === "solo") return false
+  return state.roundWins[0] >= WINS_NEEDED || state.roundWins[1] >= WINS_NEEDED
 }
 
 function applyTurnScore(

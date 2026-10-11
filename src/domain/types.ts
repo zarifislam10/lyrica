@@ -45,6 +45,6 @@ export type Song = {
   audioUrl: string
   // Set until a native speaker confirms the syllable-to-note mapping.
   needsNativeSpeakerCheck: boolean
-  // Exactly three: one per round.
+  // Three lines; a match sings the first ROUNDS_PER_MATCH of them.
   lines: PracticeLine[]
 }

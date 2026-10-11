@@ -10,6 +10,7 @@ import {
 import { songs } from "@/data/songs"
 import {
   PLAYER_COLORS,
+  ROUNDS_PER_MATCH,
   TURN_SECONDS,
   createMatchState,
   displayName,
@@ -431,27 +432,34 @@ function ScreenHeader({
   playerColor?: string
   onHome: () => void
 }) {
+  const multiRound = ROUNDS_PER_MATCH > 1
   return (
     <header className="screen-header">
       <Brand onHome={onHome} />
       <div className="line-progress">
         <span>
-          Round {round} <i>of</i> 3
-          {playerLabel ? (
+          {multiRound && (
             <>
-              {" "}
-              ·{" "}
-              <b style={{ color: playerColor, fontWeight: 800 }}>
-                {playerLabel}
-              </b>
+              Round {round} <i>of</i> {ROUNDS_PER_MATCH}
             </>
+          )}
+          {multiRound && playerLabel ? <> · </> : null}
+          {playerLabel ? (
+            <b style={{ color: playerColor, fontWeight: 800 }}>{playerLabel}</b>
           ) : null}
         </span>
-        <div className="progress-dots" aria-label={`Round ${round} of 3`}>
-          {[1, 2, 3].map((item) => (
-            <i className={item === round ? "active" : ""} key={item} />
-          ))}
-        </div>
+        {multiRound && (
+          <div
+            className="progress-dots"
+            aria-label={`Round ${round} of ${ROUNDS_PER_MATCH}`}
+          >
+            {Array.from({ length: ROUNDS_PER_MATCH }, (_, i) => i + 1).map(
+              (item) => (
+                <i className={item === round ? "active" : ""} key={item} />
+              ),
+            )}
+          </div>
+        )}
       </div>
     </header>
   )
@@ -467,12 +475,12 @@ const MODE_OPTIONS: ModeOption[] = [
   {
     mode: "solo",
     title: "Solo",
-    body: "Sing three lines on your own. Get a Tune score and the syllables to fix after each one.",
+    body: "Sing a line on your own. Get a Tune score and the syllables to fix.",
   },
   {
     mode: "battle",
     title: "Battle",
-    body: "Two players, one device. Take turns singing each line. Best of three wins.",
+    body: "Two players, one device. Take turns singing the same line. Higher score wins.",
   },
 ]
 
@@ -1235,7 +1243,7 @@ function RoundResultScreen({
           </div>
         ))}
 
-        {!solo && (
+        {!solo && ROUNDS_PER_MATCH > 1 && (
           <div className="scoreboard-row">
             <span style={{ color: PLAYER_COLORS[0] }}>
               {displayName(state, 0)}
