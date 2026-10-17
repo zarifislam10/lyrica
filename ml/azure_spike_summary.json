@@ -1,0 +1,128 @@
+{
+  "reference_text": "happy birthday to you",
+  "locale": "en-US",
+  "good": {
+    "count": 12,
+    "recognized": 12,
+    "recognition_rate": 1.0,
+    "accuracy": {
+      "n": 12,
+      "mean": 37.92,
+      "median": 39.5,
+      "min": 7.0,
+      "max": 48.0
+    },
+    "pronunciation": {
+      "n": 12,
+      "mean": 57.2,
+      "median": 60.55,
+      "min": 22.4,
+      "max": 67.1
+    },
+    "completeness": {
+      "n": 12,
+      "mean": 41.67,
+      "median": 50.0,
+      "min": 0.0,
+      "max": 50.0
+    },
+    "fluency": {
+      "n": 12,
+      "mean": 97.5,
+      "median": 100.0,
+      "min": 71.0,
+      "max": 100.0
+    },
+    "prosody": {
+      "n": 12,
+      "mean": 73.18,
+      "median": 75.4,
+      "min": 34.2,
+      "max": 89.3
+    },
+    "by_type": {
+      "sung": {
+        "n": 11,
+        "mean": 40.73,
+        "median": 41.0,
+        "min": 34.0,
+        "max": 48.0
+      },
+      "spoken": {
+        "n": 1,
+        "mean": 7.0,
+        "median": 7.0,
+        "min": 7.0,
+        "max": 7.0
+      },
+      "non-vocal": {
+        "n": 0
+      }
+    }
+  },
+  "bad": {
+    "count": 6,
+    "recognized": 6,
+    "recognition_rate": 1.0,
+    "accuracy": {
+      "n": 6,
+      "mean": 5.17,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 31.0
+    },
+    "pronunciation": {
+      "n": 6,
+      "mean": 3.8,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 22.8
+    },
+    "completeness": {
+      "n": 6,
+      "mean": 4.17,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 25.0
+    },
+    "fluency": {
+      "n": 6,
+      "mean": 1.5,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 9.0
+    },
+    "prosody": {
+      "n": 1,
+      "mean": 40.1,
+      "median": 40.1,
+      "min": 40.1,
+      "max": 40.1
+    },
+    "by_type": {
+      "sung": {
+        "n": 0
+      },
+      "spoken": {
+        "n": 2,
+        "mean": 15.5,
+        "median": 15.5,
+        "min": 0.0,
+        "max": 31.0
+      },
+      "non-vocal": {
+        "n": 4,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "mean_accuracy_separation": 32.75,
+  "notes": [
+    "Separation > ~20 is a positive signal that Azure can tell good from bad on sung Happy Birthday takes.",
+    "Separation < ~10 means Azure's accuracy is not discriminative on this material; look at by_type to see if sung underperforms.",
+    "Low recognition_rate on sung takes means Azure's STT can't even hear the words \u2014 a known hard case for sung speech."
+  ]
+}

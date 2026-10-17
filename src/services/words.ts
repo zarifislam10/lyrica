@@ -1,15 +1,20 @@
-// Capture the turn's audio alongside the pitch detector, convert it to the
-// 16 kHz mono WAV the backend's Words probe expects, and POST it. If anything
-// goes wrong — denied permission, decode failure, 503, or 5 s timeout — we
-// return null so the caller can show "Words unavailable" instead of a fake
-// number.
+// Capture the turn's audio by tapping the shared microphone stream through
+// an AudioWorklet. We write our own WAV with the AudioContext's known
+// sample rate, so playback matches the recording exactly (no webm/opus
+// container, no decoding step, no duration=Infinity bug).
+//
+// Any failure (worklet unsupported, dispose called before stop, 503, or
+// 15 s timeout) returns null so the caller can show "Words unavailable"
+// instead of a fake number.
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000"
-const WORDS_TARGET_RATE = 16_000
 // The first call after a backend restart has to build the per-song reference
 // features (decode the mp3 + run the model), which takes several seconds on
 // CPU. 5s wasn't enough and users saw "Words unavailable" on their first turn.
 const WORDS_TIMEOUT_MS = 15_000
+
+const WORKLET_URL = "/recorder-processor.js"
+const WORKLET_NAME = "recorder-processor"
 
 export type WordsResult = {
   words: number
@@ -17,53 +22,40 @@ export type WordsResult = {
 }
 
 export type WordsCapture = {
-  // Resolves to the WAV blob (16 kHz, mono, PCM 16-bit) or null if the
-  // recorder never produced any usable audio.
+  // Resolves to the WAV blob (AudioContext.sampleRate, mono, PCM 16-bit) or
+  // null if nothing was recorded.
   stop: () => Promise<Blob | null>
   // Idempotent cleanup — safe to call on any exit path (unmount, nav, error).
   dispose: () => void
 }
 
-// Pick a mimeType the browser can both record AND decode. Firefox/Chrome
-// give us webm/opus; Safari uses mp4/aac. Both go through decodeAudioData.
-function pickMimeType(): string | undefined {
-  const Rec = (globalThis as unknown as {
-    MediaRecorder?: typeof MediaRecorder
-  }).MediaRecorder
-  if (!Rec) return undefined
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4;codecs=mp4a.40.2",
-    "audio/mp4",
-  ]
-  for (const t of candidates) {
-    if (Rec.isTypeSupported?.(t)) return t
-  }
-  return undefined
-}
-
 /**
- * Start recording from the shared microphone stream. Call `stop()` once the
- * turn ends to get the WAV. The returned Blob is already resampled to
- * 16 kHz mono so it can be POSTed directly.
+ * Start recording from the shared microphone stream using an AudioWorklet.
+ * The returned `stop()` resolves to a WAV blob at the AudioContext's native
+ * sample rate.
  */
-export function startWordsCapture(stream: MediaStream): WordsCapture {
-  const Rec = (globalThis as unknown as {
-    MediaRecorder?: typeof MediaRecorder
-  }).MediaRecorder
-  if (!Rec) {
+export function startWordsCapture(
+  stream: MediaStream,
+  ctx: AudioContext,
+): WordsCapture {
+  // Fast exit if AudioWorklet isn't available (very old Safari).
+  if (!ctx.audioWorklet || typeof AudioWorkletNode === "undefined") {
     return {
       stop: async () => null,
       dispose: () => {},
     }
   }
 
-  const mimeType = pickMimeType()
-  const options = mimeType ? { mimeType } : undefined
-  let recorder: MediaRecorder
+  const sampleRate = ctx.sampleRate
+  let source: MediaStreamAudioSourceNode | null = null
+  let node: AudioWorkletNode | null = null
+  const chunks: Float32Array[] = []
+  let totalSamples = 0
+  let disposed = false
+  let settled = false
+
   try {
-    recorder = new Rec(stream, options)
+    source = ctx.createMediaStreamSource(stream)
   } catch {
     return {
       stop: async () => null,
@@ -71,108 +63,62 @@ export function startWordsCapture(stream: MediaStream): WordsCapture {
     }
   }
 
-  const chunks: Blob[] = []
-  recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) chunks.push(event.data)
-  }
-
-  // Start with a 1s timeslice. Without one, ondataavailable only fires at
-  // stop(), and in Chrome that final event can hang when another consumer
-  // (our pitch-detection AudioContext) is attached to the same stream.
-  // With a timeslice the recorder keeps pushing buffered chunks, so stop()
-  // sees data immediately and onstop fires reliably.
-  try {
-    recorder.start(1000)
-  } catch {
-    return {
-      stop: async () => null,
-      dispose: () => {},
-    }
-  }
-
-  let stopped = false
-  const dispose = () => {
-    if (recorder.state !== "inactive") {
-      try {
-        recorder.stop()
-      } catch {
-        // ignore; we're releasing on an exit path anyway.
+  // addModule is idempotent — the browser dedupes repeat calls per context.
+  const nodePromise: Promise<AudioWorkletNode | null> = ctx.audioWorklet
+    .addModule(WORKLET_URL)
+    .then(() => {
+      if (disposed || !source) return null
+      const n = new AudioWorkletNode(ctx, WORKLET_NAME)
+      n.port.onmessage = (event: MessageEvent) => {
+        if (settled) return
+        const chunk = event.data as Float32Array
+        chunks.push(chunk)
+        totalSamples += chunk.length
       }
-    }
-  }
-
-  const stop = (): Promise<Blob | null> => {
-    if (stopped) return Promise.resolve(null)
-    stopped = true
-    return new Promise<Blob | null>((resolve) => {
-      const finish = async () => {
-        if (chunks.length === 0) {
-          resolve(null)
-          return
-        }
-        // Resolve the raw recorder blob (webm/opus or mp4/aac) so playback
-        // sounds like the player actually recorded. The 16 kHz mono WAV
-        // we used to build here was lossy and quiet on playback; the
-        // backend Words path is bypassed in demo mode anyway.
-        resolve(new Blob(chunks, { type: mimeType ?? "audio/webm" }))
-      }
-      recorder.onstop = () => void finish()
-      if (recorder.state === "inactive") {
-        void finish()
-      } else {
-        try {
-          recorder.stop()
-        } catch {
-          void finish()
-        }
-      }
+      source.connect(n)
+      // Deliberately NOT connected to ctx.destination — that would echo
+      // the mic to the speakers.
+      node = n
+      return n
     })
+    .catch(() => null)
+
+  const teardown = () => {
+    try {
+      node?.disconnect()
+    } catch {
+      // ignore
+    }
+    try {
+      source?.disconnect()
+    } catch {
+      // ignore
+    }
+  }
+
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    settled = true
+    void nodePromise.then(teardown)
+  }
+
+  const stop = async (): Promise<Blob | null> => {
+    if (settled) return null
+    settled = true
+    await nodePromise
+    teardown()
+    if (totalSamples === 0) return null
+    const merged = new Float32Array(totalSamples)
+    let offset = 0
+    for (const c of chunks) {
+      merged.set(c, offset)
+      offset += c.length
+    }
+    return encodeWav(merged, sampleRate)
   }
 
   return { stop, dispose }
-}
-
-async function rawBlobToWav16kMono(raw: Blob): Promise<Blob | null> {
-  const buffer = await raw.arrayBuffer()
-  if (buffer.byteLength === 0) return null
-
-  // We decode in a short-lived AudioContext so we don't tangle with the mic
-  // session's context; closed immediately after.
-  const AudioCtor =
-    window.AudioContext as typeof AudioContext | undefined ??
-    (window as unknown as { webkitAudioContext?: typeof AudioContext })
-      .webkitAudioContext
-  const OfflineCtor =
-    window.OfflineAudioContext as typeof OfflineAudioContext | undefined ??
-    (window as unknown as {
-      webkitOfflineAudioContext?: typeof OfflineAudioContext
-    }).webkitOfflineAudioContext
-  if (!AudioCtor || !OfflineCtor) return null
-
-  const decodeCtx = new AudioCtor()
-  let decoded: AudioBuffer
-  try {
-    decoded = await decodeCtx.decodeAudioData(buffer.slice(0))
-  } catch {
-    void decodeCtx.close().catch(() => {})
-    return null
-  }
-  void decodeCtx.close().catch(() => {})
-
-  // Resample to 16 kHz mono via OfflineAudioContext.
-  const durationSeconds = decoded.duration
-  const targetFrames = Math.max(
-    1,
-    Math.round(durationSeconds * WORDS_TARGET_RATE),
-  )
-  const offline = new OfflineCtor(1, targetFrames, WORDS_TARGET_RATE)
-  const src = offline.createBufferSource()
-  src.buffer = decoded
-  src.connect(offline.destination)
-  src.start(0)
-  const rendered = await offline.startRendering()
-
-  return encodeWav(rendered.getChannelData(0), WORDS_TARGET_RATE)
 }
 
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -219,7 +165,7 @@ function writeAscii(view: DataView, offset: number, text: string): void {
 }
 
 /**
- * POST the WAV to /words-score. Enforces a 5 s timeout. Returns null on any
+ * POST the WAV to /words-score. Enforces a 15 s timeout. Returns null on any
  * failure (timeout, 503, non-OK, bad JSON) so the caller can show
  * "Words unavailable" instead of a stand-in number.
  */

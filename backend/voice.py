@@ -262,11 +262,16 @@ async def say_line(
                     # - high similarity_boost biases toward the source clone
                     # - style keeps a little expressiveness
                     # - speaker_boost is ElevenLabs' extra similarity pass
+                    # - speed < 1.0 slows the delivery so sung-feel lines
+                    #   don't come out as a rushed sentence. ElevenLabs
+                    #   supports 0.7-1.2; 0.85 is noticeably more musical
+                    #   without warping the voice.
                     "voice_settings": {
                         "stability": 0.35,
                         "similarity_boost": 0.95,
                         "style": 0.3,
                         "use_speaker_boost": True,
+                        "speed": 0.85,
                     },
                 },
             )

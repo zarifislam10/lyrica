@@ -1,0 +1,118 @@
+{
+  "song_id": "happy-birthday-ar",
+  "language": "ar",
+  "voice_id_placeholder": false,
+  "clips": {
+    "1-0": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "1-1": {
+      "text": "مِي",
+      "romanization": "mī",
+      "file": "01-01-mi.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "1-2": {
+      "text": "لا",
+      "romanization": "lā",
+      "file": "01-02-la.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "1-3": {
+      "text": "دٍ",
+      "romanization": "din",
+      "file": "01-03-din.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "1-4": {
+      "text": "سَ",
+      "romanization": "sa",
+      "file": "01-04-sa.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "1-5": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 1.44
+    },
+    "2-0": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "2-1": {
+      "text": "مِي",
+      "romanization": "mī",
+      "file": "01-01-mi.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "2-2": {
+      "text": "لا",
+      "romanization": "lā",
+      "file": "01-02-la.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "2-3": {
+      "text": "دٍ",
+      "romanization": "din",
+      "file": "01-03-din.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "2-4": {
+      "text": "سَ",
+      "romanization": "sa",
+      "file": "01-04-sa.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "2-5": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 1.44
+    },
+    "3-0": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "3-1": {
+      "text": "مِي",
+      "romanization": "mī",
+      "file": "01-01-mi.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "3-2": {
+      "text": "لا",
+      "romanization": "lā",
+      "file": "01-02-la.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "3-3": {
+      "text": "دٍ",
+      "romanization": "din",
+      "file": "01-03-din.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "3-4": {
+      "text": "سَ",
+      "romanization": "sa",
+      "file": "01-04-sa.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "3-5": {
+      "text": "عِيدْ",
+      "romanization": "ʿīd",
+      "file": "01-00-id.mp3",
+      "duration_hint_sec": 1.44
+    }
+  },
+  "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "model_id": "eleven_multilingual_v2",
+  "speaking_speed": 0.75
+}

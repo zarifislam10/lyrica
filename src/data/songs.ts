@@ -1,4 +1,4 @@
-import type { Language, PracticeLine, Song } from "@/domain/types"
+import type { Chord, Language, PracticeLine, Song } from "@/domain/types"
 
 export const LINES_PER_SONG = 3
 // Seconds per beat. 80 BPM — close to a natural Happy Birthday pace, slow
@@ -44,6 +44,28 @@ export const MELODY: Note[][] = [
   ],
 ]
 
+// Chord changes per line, aligned to MELODY above. Classic 3-chord
+// harmonization of Happy Birthday in C major (I = C, IV = F, V7 = G7):
+//   Line 1 ("Happy birthday to you")       — C → G7
+//   Line 2 ("Happy birthday to you")       — C → F
+//   Line 3 ("Happy birthday to you" climb) — F → C
+// Beat offsets split each 6-beat line in half, so the harmony changes
+// mid-phrase like a real accompaniment.
+export const CHORDS: Chord[][] = [
+  [
+    { atBeat: 0, root: 0, quality: "major" },
+    { atBeat: 3, root: 7, quality: "dominant7" },
+  ],
+  [
+    { atBeat: 0, root: 0, quality: "major" },
+    { atBeat: 3, root: 5, quality: "major" },
+  ],
+  [
+    { atBeat: 0, root: 5, quality: "major" },
+    { atBeat: 3, root: 0, quality: "major" },
+  ],
+]
+
 type Lyric = {
   id: string
   title: string
@@ -65,7 +87,12 @@ function notesOf(sung: string): string[][] {
   return sung.split(" ").map((note) => note.split("+"))
 }
 
-function buildLine(lyric: Lyric, melody: Note[], id: number): PracticeLine {
+function buildLine(
+  lyric: Lyric,
+  melody: Note[],
+  chords: Chord[],
+  id: number,
+): PracticeLine {
   const notes = notesOf(lyric.sung)
   const romans = lyric.sungRomanization
     ? notesOf(lyric.sungRomanization)
@@ -105,6 +132,7 @@ function buildLine(lyric: Lyric, melody: Note[], id: number): PracticeLine {
     text: lyric.text,
     ...(lyric.romanization ? { romanization: lyric.romanization } : {}),
     syllables,
+    chords,
   }
 }
 
@@ -115,7 +143,9 @@ function buildSong(lyric: Lyric): Song {
     language: lyric.language,
     audioUrl: `/songs/${lyric.id}.mp3`,
     needsNativeSpeakerCheck: lyric.needsNativeSpeakerCheck,
-    lines: MELODY.map((melody, i) => buildLine(lyric, melody, i + 1)),
+    lines: MELODY.map((melody, i) =>
+      buildLine(lyric, melody, CHORDS[i], i + 1),
+    ),
   }
 }
 
@@ -154,4 +184,135 @@ const lyrics: Lyric[] = [
   },
 ]
 
-export const songs: Song[] = lyrics.map(buildSong)
+// First Snow (Korean) — generated with Suno (K-pop ballad, 85 BPM, female
+// lead). First-pass syllable-to-note mapping derived from a Basic Pitch
+// MIDI export of the isolated vocal stem; all semitones are relative to
+// the vocal's duration-weighted median (D4). Marked for native-speaker
+// check because syllable romanization and timing both need an ear pass.
+// audioStart/audioEnd point into the full-mix clip for "Hear it sung",
+// and the sing-screen backing seeks to audioStart so the backing lines
+// up with when the vocal actually enters at ~12.2 s.
+const firstSnowKo: Song = {
+  id: "first-snow-ko",
+  title: "First Snow",
+  language: "ko",
+  audioUrl: "/songs/first-snow-ko-full.mp3",
+  backingTrackUrl: "/songs/first-snow-ko-backing.mp3",
+  // Wilson Bentley snowflake #13 (c. 1902), public domain via Wikimedia
+  // Commons. Fetched via Special:FilePath/Bentley_Snowflake13.jpg.
+  coverUrl: "/songs/first-snow-ko-cover.jpg",
+  needsNativeSpeakerCheck: true,
+  lines: [
+    {
+      id: 1,
+      text: "첫눈이 내려와",
+      romanization: "cheot-nu-ni nae-ryeo-wa",
+      audioStart: 12.0,
+      audioEnd: 17.2,
+      syllables: [
+        {
+          text: "첫",
+          romanization: "cheot",
+          start: 0.0,
+          end: 0.37,
+          semitones: -2,
+        },
+        {
+          text: "눈",
+          romanization: "nun",
+          start: 0.37,
+          end: 0.86,
+          semitones: -2,
+        },
+        { text: "이", romanization: "i", start: 0.86, end: 1.37, semitones: 0 },
+        {
+          text: "내",
+          romanization: "nae",
+          start: 1.37,
+          end: 3.11,
+          semitones: 0,
+        },
+        {
+          text: "려",
+          romanization: "ryeo",
+          start: 3.37,
+          end: 3.74,
+          semitones: -4,
+        },
+        {
+          text: "와",
+          romanization: "wa",
+          start: 3.74,
+          end: 4.64,
+          semitones: -5,
+        },
+      ],
+    },
+    {
+      id: 2,
+      text: "네 생각이 나",
+      // Syllable-faithful romanization (매 syllable romanized standalone)
+      // so the line text matches the per-syllable romanizations exactly.
+      // Natural-speech liaison "saeng-ga-gi" is lost but readability stays.
+      romanization: "ne saeng-gak i na",
+      audioStart: 18.3,
+      audioEnd: 23.5,
+      syllables: [
+        { text: "네", romanization: "ne", start: 0.0, end: 0.5, semitones: 0 },
+        {
+          text: "생",
+          romanization: "saeng",
+          start: 0.5,
+          end: 1.0,
+          semitones: 2,
+        },
+        { text: "각", romanization: "gak", start: 1.0, end: 2.5, semitones: 4 },
+        { text: "이", romanization: "i", start: 2.5, end: 3.5, semitones: 5 },
+        { text: "나", romanization: "na", start: 3.5, end: 4.8, semitones: 2 },
+      ],
+    },
+    {
+      id: 3,
+      text: "보고 싶어 많이",
+      romanization: "bo-go si-peo ma-ni",
+      audioStart: 24.4,
+      audioEnd: 27.5,
+      syllables: [
+        { text: "보", romanization: "bo", start: 0.0, end: 0.4, semitones: -2 },
+        { text: "고", romanization: "go", start: 0.4, end: 0.9, semitones: 0 },
+        { text: "싶", romanization: "sip", start: 0.9, end: 1.3, semitones: 0 },
+        { text: "어", romanization: "eo", start: 1.3, end: 1.6, semitones: -2 },
+        { text: "많", romanization: "man", start: 1.6, end: 2.1, semitones: 0 },
+        { text: "이", romanization: "i", start: 2.1, end: 2.6, semitones: -2 },
+      ],
+    },
+    {
+      id: 4,
+      text: "내 마음 알지",
+      romanization: "nae ma-eum al-ji",
+      audioStart: 28.1,
+      audioEnd: 32.0,
+      syllables: [
+        {
+          text: "내",
+          romanization: "nae",
+          start: 0.0,
+          end: 0.5,
+          semitones: -7,
+        },
+        { text: "마", romanization: "ma", start: 0.5, end: 1.0, semitones: -3 },
+        {
+          text: "음",
+          romanization: "eum",
+          start: 1.0,
+          end: 1.5,
+          semitones: -5,
+        },
+        { text: "알", romanization: "al", start: 1.5, end: 2.5, semitones: -5 },
+        { text: "지", romanization: "ji", start: 2.5, end: 3.5, semitones: -7 },
+      ],
+    },
+  ],
+}
+
+export const songs: Song[] = [...lyrics.map(buildSong), firstSnowKo]

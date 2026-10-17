@@ -1,8 +1,13 @@
 """First backend milestone: turn one fixed announcement into speech."""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# INFO level so our dev-only diagnostics (e.g. backend/words.py raw similarity)
+# show in `uvicorn backend.main:app` output without extra config.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 import httpx
 from dotenv import load_dotenv

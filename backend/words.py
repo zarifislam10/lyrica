@@ -11,6 +11,7 @@ to disk and nothing about the audio is logged.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from typing import Optional
 import numpy as np
 import torch
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+logger = logging.getLogger("words")
 
 from words_scoring import (
     PhonemeBackbone,
@@ -178,4 +181,19 @@ async def words_score(
 
     sim = similarity(ref_feat, take_feat, svc.cfg)
     words = similarity_to_percent(sim, svc.low, svc.high)
+    # Dev-only diagnostic. Lets us see raw similarity vs calibration band
+    # when a take scores unexpectedly low — the only user-visible number
+    # otherwise is the clamped 0-100 scaled value.
+    logger.info(
+        "words-score song=%s sim=%.4f low=%.4f high=%.4f "
+        "take_sec=%.2f ref_frames=%d take_frames=%d words=%d",
+        song_id,
+        sim,
+        svc.low,
+        svc.high,
+        samples.size / 16_000.0,
+        ref_feat.shape[0],
+        take_feat.shape[0],
+        words,
+    )
     return {"words": words, "heardWords": words >= HEARD_WORDS_THRESHOLD}

@@ -1,0 +1,136 @@
+{
+  "song_id": "happy-birthday-ko",
+  "language": "ko",
+  "voice_id_placeholder": false,
+  "clips": {
+    "1-0": {
+      "text": "생",
+      "romanization": "saeng",
+      "file": "01-00-saeng.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "1-1": {
+      "text": "일",
+      "romanization": "il",
+      "file": "01-01-il.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "1-2": {
+      "text": "축",
+      "romanization": "chu",
+      "file": "01-02-chu.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "1-3": {
+      "text": "하",
+      "romanization": "ka",
+      "file": "01-03-ka.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "1-4": {
+      "text": "합",
+      "romanization": "ham",
+      "file": "01-04-ham.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "1-5": {
+      "text": "니",
+      "romanization": "ni",
+      "file": "01-05-ni.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "1-6": {
+      "text": "다",
+      "romanization": "da",
+      "file": "01-06-da.mp3",
+      "duration_hint_sec": 1.44
+    },
+    "2-0": {
+      "text": "생",
+      "romanization": "saeng",
+      "file": "01-00-saeng.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "2-1": {
+      "text": "일",
+      "romanization": "il",
+      "file": "01-01-il.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "2-2": {
+      "text": "축",
+      "romanization": "chu",
+      "file": "01-02-chu.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "2-3": {
+      "text": "하",
+      "romanization": "ka",
+      "file": "01-03-ka.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "2-4": {
+      "text": "합",
+      "romanization": "ham",
+      "file": "01-04-ham.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "2-5": {
+      "text": "니",
+      "romanization": "ni",
+      "file": "01-05-ni.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "2-6": {
+      "text": "다",
+      "romanization": "da",
+      "file": "01-06-da.mp3",
+      "duration_hint_sec": 1.44
+    },
+    "3-0": {
+      "text": "생",
+      "romanization": "saeng",
+      "file": "01-00-saeng.mp3",
+      "duration_hint_sec": 0.502
+    },
+    "3-1": {
+      "text": "일",
+      "romanization": "il",
+      "file": "01-01-il.mp3",
+      "duration_hint_sec": 0.127
+    },
+    "3-2": {
+      "text": "축",
+      "romanization": "chu",
+      "file": "01-02-chu.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "3-3": {
+      "text": "하",
+      "romanization": "ka",
+      "file": "01-03-ka.mp3",
+      "duration_hint_sec": 0.69
+    },
+    "3-4": {
+      "text": "합",
+      "romanization": "ham",
+      "file": "01-04-ham.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "3-5": {
+      "text": "니",
+      "romanization": "ni",
+      "file": "01-05-ni.mp3",
+      "duration_hint_sec": 0.315
+    },
+    "3-6": {
+      "text": "다",
+      "romanization": "da",
+      "file": "01-06-da.mp3",
+      "duration_hint_sec": 1.44
+    }
+  },
+  "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "model_id": "eleven_multilingual_v2",
+  "speaking_speed": 0.75
+}

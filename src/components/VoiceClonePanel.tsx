@@ -68,6 +68,10 @@ export default function VoiceClonePanel({
   const tickTimerRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
+  // ElevenLabs cloned voices often come back quieter than the TTS reference,
+  // so we route playback through a GainNode and boost the signal ~2x. The
+  // AudioContext is kept per-play and torn down on end/unmount.
+  const playCtxRef = useRef<AudioContext | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const prefetchRef = useRef<AbortController | null>(null)
   // Memoised blob keyed by lineId so switching rounds re-prefetches but
@@ -92,6 +96,10 @@ export default function VoiceClonePanel({
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
+      }
+      if (playCtxRef.current) {
+        void playCtxRef.current.close().catch(() => {})
+        playCtxRef.current = null
       }
       if (audioUrlRef.current) {
         URL.revokeObjectURL(audioUrlRef.current)
@@ -256,6 +264,10 @@ export default function VoiceClonePanel({
       audioRef.current.pause()
       audioRef.current = null
     }
+    if (playCtxRef.current) {
+      void playCtxRef.current.close().catch(() => {})
+      playCtxRef.current = null
+    }
     setPlaying(true)
     try {
       // Fast path: prefetched blob already decoded into a URL.
@@ -274,19 +286,55 @@ export default function VoiceClonePanel({
       }
       const el = new Audio(url)
       audioRef.current = el
+      // Route through a GainNode so we can push loudness above 1.0 (the raw
+      // HTMLAudioElement caps at 1.0 and the cloned voice frequently comes
+      // back quieter than the TTS reference). If WebAudio isn't available,
+      // fall back to the raw element at max volume.
+      el.volume = 1
+      try {
+        const Ctor: typeof AudioContext | undefined =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext
+        if (Ctor) {
+          const ctx = new Ctor()
+          playCtxRef.current = ctx
+          const src = ctx.createMediaElementSource(el)
+          const gain = ctx.createGain()
+          gain.gain.value = 2.2
+          src.connect(gain)
+          gain.connect(ctx.destination)
+          if (ctx.state === "suspended") await ctx.resume().catch(() => {})
+        }
+      } catch {
+        // Fall back silently to the raw element.
+      }
+      const teardownCtx = () => {
+        if (playCtxRef.current) {
+          void playCtxRef.current.close().catch(() => {})
+          playCtxRef.current = null
+        }
+      }
       el.onended = () => {
         setPlaying(false)
+        teardownCtx()
       }
       el.onerror = () => {
         setPlaying(false)
+        teardownCtx()
         setError("Could not play the voice copy.")
       }
       await el.play().catch(() => {
         setPlaying(false)
+        teardownCtx()
         setError("Tap play again to hear the voice copy.")
       })
     } catch (err) {
       setPlaying(false)
+      if (playCtxRef.current) {
+        void playCtxRef.current.close().catch(() => {})
+        playCtxRef.current = null
+      }
       const code = err instanceof VoiceCloneError ? err.code : "unknown"
       setError(
         code === "expired"
@@ -299,7 +347,6 @@ export default function VoiceClonePanel({
   if (phase === "idle") {
     return (
       <div className="voice-clone-panel voice-clone-cta">
-        <div className="voice-clone-badge">New</div>
         <h4 className="voice-clone-title">
           <span aria-hidden="true">✨</span> Hear how you'd sound
         </h4>

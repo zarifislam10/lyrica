@@ -1,0 +1,142 @@
+{
+  "song_id": "first-snow-ko",
+  "language": "ko",
+  "voice_id_placeholder": false,
+  "clips": {
+    "1-0": {
+      "text": "첫",
+      "romanization": "cheot",
+      "file": "01-00-cheot.mp3",
+      "duration_hint_sec": 0.37
+    },
+    "1-1": {
+      "text": "눈",
+      "romanization": "nun",
+      "file": "01-01-nun.mp3",
+      "duration_hint_sec": 0.49
+    },
+    "1-2": {
+      "text": "이",
+      "romanization": "i",
+      "file": "01-02-i.mp3",
+      "duration_hint_sec": 0.51
+    },
+    "1-3": {
+      "text": "내",
+      "romanization": "nae",
+      "file": "01-03-nae.mp3",
+      "duration_hint_sec": 1.74
+    },
+    "1-4": {
+      "text": "려",
+      "romanization": "ryeo",
+      "file": "01-04-ryeo.mp3",
+      "duration_hint_sec": 0.37
+    },
+    "1-5": {
+      "text": "와",
+      "romanization": "wa",
+      "file": "01-05-wa.mp3",
+      "duration_hint_sec": 0.9
+    },
+    "2-0": {
+      "text": "네",
+      "romanization": "ne",
+      "file": "02-00-ne.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "2-1": {
+      "text": "생",
+      "romanization": "saeng",
+      "file": "02-01-saeng.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "2-2": {
+      "text": "각",
+      "romanization": "gak",
+      "file": "02-02-gak.mp3",
+      "duration_hint_sec": 1.5
+    },
+    "2-3": {
+      "text": "이",
+      "romanization": "i",
+      "file": "01-02-i.mp3",
+      "duration_hint_sec": 1.0
+    },
+    "2-4": {
+      "text": "나",
+      "romanization": "na",
+      "file": "02-04-na.mp3",
+      "duration_hint_sec": 1.3
+    },
+    "3-0": {
+      "text": "보",
+      "romanization": "bo",
+      "file": "03-00-bo.mp3",
+      "duration_hint_sec": 0.4
+    },
+    "3-1": {
+      "text": "고",
+      "romanization": "go",
+      "file": "03-01-go.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "3-2": {
+      "text": "싶",
+      "romanization": "sip",
+      "file": "03-02-sip.mp3",
+      "duration_hint_sec": 0.4
+    },
+    "3-3": {
+      "text": "어",
+      "romanization": "eo",
+      "file": "03-03-eo.mp3",
+      "duration_hint_sec": 0.3
+    },
+    "3-4": {
+      "text": "많",
+      "romanization": "man",
+      "file": "03-04-man.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "3-5": {
+      "text": "이",
+      "romanization": "i",
+      "file": "01-02-i.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "4-0": {
+      "text": "내",
+      "romanization": "nae",
+      "file": "01-03-nae.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "4-1": {
+      "text": "마",
+      "romanization": "ma",
+      "file": "04-01-ma.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "4-2": {
+      "text": "음",
+      "romanization": "eum",
+      "file": "04-02-eum.mp3",
+      "duration_hint_sec": 0.5
+    },
+    "4-3": {
+      "text": "알",
+      "romanization": "al",
+      "file": "04-03-al.mp3",
+      "duration_hint_sec": 1.0
+    },
+    "4-4": {
+      "text": "지",
+      "romanization": "ji",
+      "file": "04-04-ji.mp3",
+      "duration_hint_sec": 1.0
+    }
+  },
+  "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "model_id": "eleven_multilingual_v2",
+  "speaking_speed": 0.75
+}

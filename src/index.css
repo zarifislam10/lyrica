@@ -656,6 +656,51 @@ button:focus-visible {
   gap: 20px;
 }
 
+/* "Line 2 / 4" + a tiny dot track above the sing content, so the singer
+ * can orient themselves inside a multi-line song. Dots fill as lines
+ * complete; the current one glows pink. */
+.line-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-family: "SpaceGrotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c4b5c9;
+}
+
+.line-progress-label {
+  white-space: nowrap;
+}
+
+.line-progress-track {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.line-progress-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a2e40;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.line-progress-dot.done {
+  background: #9b3dff;
+}
+
+.line-progress-dot.current {
+  background: #ff4fa3;
+  box-shadow: 0 0 10px rgba(255, 79, 163, 0.75);
+}
+
 .hear-button {
   display: flex;
   min-width: 108px;
@@ -911,13 +956,57 @@ button:focus-visible {
   opacity: 0.32;
 }
 
+/* Translucent "credit zone" around each target bar. Everything inside
+ * this band still earns at least ~50% of the pitch points for that
+ * syllable, so singers see how much slack they have before the note
+ * stops counting. Sits behind the target bar (z-index 1 vs bar's 2). */
+.credit-zone {
+  position: absolute;
+  z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    rgba(155, 61, 255, 0) 0%,
+    rgba(155, 61, 255, 0.18) 50%,
+    rgba(155, 61, 255, 0) 100%
+  );
+  border-top: 1px dashed rgba(155, 61, 255, 0.35);
+  border-bottom: 1px dashed rgba(155, 61, 255, 0.35);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Smule-style hollow pill: the bar reads as a target to fill rather than a
+ * solid line, so the voice-line overlay feels like it's lighting the bar
+ * up as the singer threads through it. The .hit state swaps to solid
+ * green below. */
 .target-bar {
   position: absolute;
   z-index: 2;
   height: 14px;
   border-radius: 20px;
-  background: #9b3dff;
+  background: rgba(155, 61, 255, 0.14);
+  border: 2px solid #9b3dff;
+  box-sizing: border-box;
   transform: translateY(50%);
+}
+
+/* Held notes get a thicker outline + brighter inner glow so singers see at
+ * a glance which syllables to sustain. The ~ cue in the label reinforces
+ * this for anyone who misses the visual. */
+.target-bar.hold {
+  height: 18px;
+  border-width: 3px;
+  border-color: #c48bff;
+  background: rgba(196, 139, 255, 0.22);
+  box-shadow:
+    inset 0 0 10px rgba(196, 139, 255, 0.45),
+    0 0 10px rgba(196, 139, 255, 0.4);
+}
+
+.bar-hold-cue {
+  color: #c48bff;
+  font-weight: 600;
+  letter-spacing: 0.1em;
 }
 
 .target-bar.missed::before {
@@ -928,40 +1017,195 @@ button:focus-visible {
   background: #4a1822;
 }
 
-.voice-line {
+/* Hit feedback: the active bar fills solid green and pulses while the
+ * singer's live pitch sits within tolerance. Pure visual reward loop. */
+.target-bar.hit {
+  background: #4ade80;
+  border-color: #4ade80;
+  box-shadow:
+    0 0 0 2px rgba(74, 222, 128, 0.35),
+    0 0 18px rgba(74, 222, 128, 0.6);
+  animation: target-bar-hit 420ms ease-in-out infinite alternate;
+}
+
+@keyframes target-bar-hit {
+  from {
+    transform: translateY(50%) scale(1);
+  }
+  to {
+    transform: translateY(50%) scale(1.08);
+  }
+}
+
+/* Replaces the old blue polyline voice-line with a glowing orb that
+ * tracks the singer's current pitch, trailing fading dots behind it.
+ * No wall-to-wall scribble, no Smule look-alike — a single live point
+ * reads as "you are here" + direction of travel. */
+.voice-orb-layer {
   position: absolute;
   z-index: 3;
-  inset: 0 0 25px;
-  width: 100%;
-  height: calc(100% - 25px);
-  overflow: visible;
+  inset: 0;
+  pointer-events: none;
+  transition: filter 120ms ease-out;
 }
 
-.voice-line polyline {
-  fill: none;
-  stroke: #19b5ff;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 4;
+.voice-trail-dot {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: #ff4fa3;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(255, 79, 163, 0.6);
+  pointer-events: none;
 }
 
+.voice-orb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff 0%,
+    #ff8ec8 35%,
+    #ff4fa3 70%,
+    rgba(255, 79, 163, 0.4) 100%
+  );
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 12px rgba(255, 79, 163, 0.9),
+    0 0 24px rgba(255, 79, 163, 0.55),
+    inset 0 0 8px rgba(255, 255, 255, 0.4);
+  animation: voice-orb-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes voice-orb-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.14);
+  }
+}
+
+/* On-target state: orb + trail swap to the hit-green palette with a
+ * stronger glow, so hitting the note feels unmistakably rewarding. */
+.voice-orb-layer.hitting .voice-trail-dot {
+  background: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.75);
+}
+
+.voice-orb-layer.hitting .voice-orb {
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff 0%,
+    #c7f9d4 35%,
+    #4ade80 70%,
+    rgba(74, 222, 128, 0.45) 100%
+  );
+  box-shadow:
+    0 0 14px rgba(74, 222, 128, 1),
+    0 0 28px rgba(74, 222, 128, 0.7),
+    inset 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* Result replay: show the whole flight path as a dot cloud with no live
+ * pulsing orb so the user can read their shape without distraction. */
+.voice-orb-layer.result .voice-trail-dot {
+  background: #ff8ec8;
+}
+
+/* Smule-style playhead: a brighter, thicker vertical sweep with a glowing
+ * head so the "now" position reads at a glance against the hollow bars. */
 .playhead {
   position: absolute;
   z-index: 5;
   top: 0;
   bottom: 25px;
-  width: 1px;
-  background: #fff;
+  width: 3px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.95) 20%,
+    rgba(255, 255, 255, 0.95) 80%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 0.7),
+    0 0 16px rgba(155, 61, 255, 0.5);
+  pointer-events: none;
 }
 
 .playhead span {
   position: absolute;
-  top: 9px;
-  left: -3px;
-  width: 7px;
-  height: 7px;
+  top: 4px;
+  left: -5px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: #fff;
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 0 20px rgba(155, 61, 255, 0.7);
+}
+
+/* Floating hit-pop that spawns at the active syllable when a sample
+ * lands inside credit range. Keyed on tier so React remounts and the
+ * pop-in animation replays each time the tier changes. */
+.hit-pop {
+  position: absolute;
+  z-index: 6;
+  top: 6px;
+  transform: translateX(-50%) scale(0.6);
+  font-family: "SpaceGrotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: hit-pop 720ms ease-out forwards;
+}
+
+.hit-pop-perfect {
+  color: #ffd96b;
+  text-shadow:
+    0 0 10px rgba(255, 217, 107, 0.9),
+    0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.hit-pop-great {
+  color: #4ade80;
+  text-shadow:
+    0 0 10px rgba(74, 222, 128, 0.8),
+    0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.hit-pop-good {
+  color: #19b5ff;
+  text-shadow:
+    0 0 10px rgba(25, 181, 255, 0.8),
+    0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes hit-pop {
+  0% {
+    transform: translateX(-50%) translateY(6px) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    transform: translateX(-50%) translateY(-2px) scale(1.15);
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(-50%) translateY(-6px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-18px) scale(0.95);
+    opacity: 0;
+  }
 }
 
 .lane-time {
@@ -2150,6 +2394,79 @@ button:focus-visible {
   cursor: pointer;
 }
 
+/* Song picker (step 2 of SongScreen). Grid of cover-art tiles. Covers are
+ * currently gradient placeholders; swap for a <img src={song.coverUrl}>
+ * once real artwork is added. */
+.song-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.song-card {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 1px solid #3a2e40;
+  background: #17101c;
+  color: #fff8ff;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.song-card:hover,
+.song-card:focus-visible {
+  border-color: #ff4fa3;
+  transform: translateY(-2px);
+}
+
+.song-cover {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* Image covers (e.g. the Bentley snowflake for First Snow). Fills the
+ * tile the same way the gradient placeholder does. */
+.song-cover-image {
+  padding: 0;
+  object-fit: cover;
+  background: #000;
+}
+
+.song-cover-title {
+  font-family: "Syne", sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  word-break: keep-all;
+}
+
+.song-card strong {
+  padding: 0 12px;
+  font-family: "Syne", sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.song-card-meta {
+  padding: 0 12px 12px;
+  color: #c4b5c9;
+  font-size: 13px;
+}
+
 .score-slots {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2452,6 +2769,128 @@ button:focus-visible {
   color: #141018;
 }
 
+/* Syllable breakdown on the result card. Lets the user tap any syllable
+   to hear the reference audio windowed to that sound, with missed
+   syllables highlighted. We never render a per-syllable score number
+   here (the Words probe is calibrated on line-length audio, not
+   sub-second clips). */
+.syllable-breakdown {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.syllable-breakdown-title {
+  margin: 0;
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(255, 248, 255, 0.72);
+}
+
+.syllable-breakdown-tiles {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.syllable-tile {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  min-width: 72px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+.syllable-tile.missed {
+  border-color: rgba(255, 79, 163, 0.6);
+  background: rgba(255, 79, 163, 0.08);
+}
+
+.syllable-tile.active {
+  border-color: var(--player, #ff4fa3);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.syllable-tile-glyphs {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.syllable-tile-text {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.syllable-tile-roman {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 248, 255, 0.68);
+  letter-spacing: 0.02em;
+}
+
+.syllable-tile-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.syllable-tile-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff8ff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.syllable-tile-button:hover {
+  border-color: var(--player, #ff4fa3);
+}
+
+.syllable-tile-button.playing {
+  background: var(--player, #ff4fa3);
+  color: #141018;
+  border-color: var(--player, #ff4fa3);
+}
+
+.syllable-tile-button.take {
+  opacity: 0.9;
+}
+
+.syllable-breakdown-hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 248, 255, 0.55);
+}
+
 /* Voice clone panel (stretch): per-player on the result screen. The
    player's accent colour is passed in via the --player CSS variable so
    this panel reads as part of their score card. */
@@ -2696,4 +3135,149 @@ button:focus-visible {
   border-radius: 999px;
   background: #241728;
   font-size: 13px;
+}
+
+/* Perform mode: continuous karaoke. Full backing track, scrolling lyric
+ * stack with the current line highlighted, song-wide progress bar above
+ * the lyrics. The pitch lane below reuses the SingScreen component
+ * scaled to the current line's duration. */
+.perform-progress-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  margin: 0 0 20px;
+  border-radius: 999px;
+  background: #2b1f31;
+  overflow: hidden;
+}
+
+.perform-progress-bar > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #9b3dff 0%, #ff4fa3 100%);
+  transition: width 0.1s linear;
+}
+
+.perform-lyric-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.perform-lyric-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: transparent;
+  color: #7a6b82;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    transform 0.2s;
+}
+
+.perform-lyric-line .perform-lyric-text {
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.perform-lyric-line .perform-lyric-roman {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5a4d60;
+}
+
+.perform-lyric-line.done {
+  color: #a897b0;
+}
+
+.perform-lyric-line.current {
+  background: rgba(255, 79, 163, 0.12);
+  color: #ffffff;
+  transform: translateX(2px);
+  box-shadow: inset 3px 0 0 #ff4fa3;
+}
+
+.perform-lyric-line.current .perform-lyric-roman {
+  color: #ffcde3;
+}
+
+/* "Up next" panel. Shown when the song is playing but there's a gap
+ * before the next line enters (always true for the pre-first-line intro
+ * on songs like First Snow). The bar fills as the start approaches so
+ * singers see when to breathe in. */
+.perform-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 79, 163, 0.35);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(155, 61, 255, 0.12),
+    rgba(255, 79, 163, 0.08)
+  );
+}
+
+.perform-preview-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "SpaceGrotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ff9ec8;
+}
+
+.perform-preview-label svg {
+  width: 14px;
+  height: 14px;
+}
+
+.perform-preview-text {
+  font-size: clamp(22px, 3.2vw, 34px);
+  font-weight: 600;
+  line-height: 1.15;
+  color: #ffffff;
+}
+
+.perform-preview-roman {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c4b5c9;
+}
+
+.perform-preview-bar {
+  position: relative;
+  margin-top: 6px;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 79, 163, 0.18);
+  overflow: hidden;
+}
+
+.perform-preview-bar > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #9b3dff 0%, #ff4fa3 100%);
+  transition: width 0.1s linear;
 }

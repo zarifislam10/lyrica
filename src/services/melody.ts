@@ -6,22 +6,22 @@
 // `SECONDS_PER_BEAT` tempo.
 //
 // There are four things this module can play:
-//   1. The full pitched melody for a line (Hear it, plus the opt-in guide
-//      during recording).
+//   1. The full pitched melody for a line (Hear it).
 //   2. A three-beat pitched count-in on the line's first note, so the
 //      player hears the key and the tempo before they sing.
 //   3. An unpitched beat track (short filtered noise ticks) that plays
 //      alongside recording by default — pitch detection and the Words
 //      model can't lock onto noise, so this stays out of scoring.
-//   4. The pitched melody + beat ticks together — opt-in only, labelled
-//      "headphones only" because speakers would bleed back into the mic.
+//   4. A full sing-along backing track (melody + bass + fifth + ticks) —
+//      opt-in only, labelled "headphones only" because any pitched sound
+//      over speakers would bleed into the mic and corrupt scoring.
 //
 // A single AudioContext is owned here so "Hear it" works before the mic
 // session has started. Every scheduled node is tracked and torn down by
 // `stopAll()`, which the UI calls on leave, record-end, and visibility
 // change.
 
-import type { PracticeLine } from "@/domain/types"
+import type { ChordQuality, PracticeLine } from "@/domain/types"
 
 // Single volume knob. Melody plays softly so headphones aren't painful and
 // so the beat track can't dominate the player's own voice over speakers.
@@ -220,11 +220,34 @@ export function playBeatTrack(
   return track(nodes)
 }
 
+// Volume balance under the melody. Bass is softer so it sits beneath; the
+// upper voices are softer still so they add body without masking the lead.
+const BASS_VOLUME = MELODY_VOLUME * 0.6
+const CHORD_VOICE_VOLUME = MELODY_VOLUME * 0.3
+
+// Semitone offsets from the chord root for each quality.
+function qualityIntervals(q: ChordQuality): readonly number[] {
+  switch (q) {
+    case "major":
+      return [0, 4, 7]
+    case "minor":
+      return [0, 3, 7]
+    case "dominant7":
+      return [0, 4, 7, 10]
+  }
+}
+
 /**
- * Beat ticks AND the pitched melody, synced. The pitched part is the
- * guide-while-singing option — the UI must label it headphones-only.
+ * Richer sing-along backing: beat ticks, the melody, and a sustained chord
+ * accompaniment. If the line carries chord data, each chord is voiced as a
+ * triad (plus a 7th for dominant7) and holds until the next change. Without
+ * chord data, we fall back to a per-syllable bass + perfect-fifth stack so
+ * other songs still get a reasonable backing.
+ *
+ * This is the "headphones only" option — pitched tones out loud bleed into
+ * the mic and corrupt pitch + Words scoring.
  */
-export function playGuideWithBeat(
+export function playSingAlongTrack(
   line: PracticeLine,
   delayS: number,
   secondsPerBeat: number,
@@ -232,11 +255,14 @@ export function playGuideWithBeat(
   const ctx = getCtx()
   if (!ctx) return NOOP_HANDLE
   const start = ctx.currentTime + Math.max(0, delayS)
-  const beats = Math.ceil(lineDurationS(line) / secondsPerBeat) + 1
+  const totalDur = lineDurationS(line)
+  const beats = Math.ceil(totalDur / secondsPerBeat) + 1
   const nodes: AnySource[] = []
+  // Beat ticks
   for (let i = 0; i < beats; i += 1) {
     nodes.push(scheduleTick(ctx, start + i * secondsPerBeat))
   }
+  // Melody (lead voice) — one tone per syllable.
   for (const s of line.syllables) {
     nodes.push(
       scheduleTone(
@@ -247,6 +273,52 @@ export function playGuideWithBeat(
         MELODY_VOLUME,
       ),
     )
+  }
+  if (line.chords && line.chords.length > 0) {
+    // Sustained chord blocks that change at each `atBeat`.
+    const sorted = [...line.chords].sort((a, b) => a.atBeat - b.atBeat)
+    for (let i = 0; i < sorted.length; i += 1) {
+      const chord = sorted[i]
+      const next = sorted[i + 1]
+      const startS = chord.atBeat * secondsPerBeat
+      const endS = next ? next.atBeat * secondsPerBeat : totalDur
+      const dur = Math.max(0.1, endS - startS)
+      const intervals = qualityIntervals(chord.quality)
+      for (let j = 0; j < intervals.length; j += 1) {
+        // Voice the chord one octave below the song's tonic register so it
+        // sits beneath the melody. Root (j=0) is the bass; the other
+        // intervals are the harmony voices above it.
+        const semi = chord.root - 12 + intervals[j]
+        const vol = j === 0 ? BASS_VOLUME : CHORD_VOICE_VOLUME
+        nodes.push(
+          scheduleTone(ctx, start + startS, dur, semitonesToHz(semi), vol),
+        )
+      }
+    }
+  } else {
+    // Fallback: per-syllable bass + perfect-fifth, no chord data available.
+    for (const s of line.syllables) {
+      const noteStart = start + s.start
+      const noteDur = Math.max(0.05, s.end - s.start)
+      nodes.push(
+        scheduleTone(
+          ctx,
+          noteStart,
+          noteDur,
+          semitonesToHz(s.semitones - 12),
+          BASS_VOLUME,
+        ),
+      )
+      nodes.push(
+        scheduleTone(
+          ctx,
+          noteStart,
+          noteDur,
+          semitonesToHz(s.semitones - 5),
+          CHORD_VOICE_VOLUME,
+        ),
+      )
+    }
   }
   return track(nodes)
 }
