@@ -59,9 +59,11 @@ def load_songs() -> list[dict]:
     for song in json.loads(result.stdout):
         texts = set(song["texts"])
         # One clip per song works because every round sings the same words.
-        # A song with different words per line needs per-line audioStart/audioEnd.
+        # A song with different words per line (e.g. First Snow) uses
+        # per-line audioStart/audioEnd windows into a longer clip, so it
+        # doesn't need a single-text "hear it" render — skip it quietly.
         if len(texts) != 1:
-            raise SongsError(f"{song['id']}: lines have different words; one clip can't cover them")
+            continue
         songs.append({"id": song["id"], "language": song["language"], "text": texts.pop()})
     return songs
 

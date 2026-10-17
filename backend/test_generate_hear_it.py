@@ -32,12 +32,11 @@ class LoadSongsTests(unittest.TestCase):
         english = next(s for s in songs if s["language"] == "en")
         self.assertEqual(english["text"], "Happy birthday to you")
 
-    def test_refuses_a_song_whose_lines_differ(self):
+    def test_skips_a_song_whose_lines_differ(self):
         out = '[{"id": "x", "language": "en", "texts": ["one", "two", "one"]}]'
         done = subprocess.CompletedProcess([], 0, stdout=out, stderr="")
         with mock.patch.object(hear_it.subprocess, "run", return_value=done):
-            with self.assertRaises(hear_it.SongsError):
-                hear_it.load_songs()
+            self.assertEqual(hear_it.load_songs(), [])
 
 
 class RenderTests(unittest.TestCase):
